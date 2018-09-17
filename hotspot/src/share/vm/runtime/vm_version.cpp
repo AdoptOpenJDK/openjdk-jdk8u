@@ -195,7 +195,7 @@ const char* Abstract_VM_Version::jre_release_version() {
                  IA64_ONLY("ia64")               \
                  AMD64_ONLY("amd64")             \
                  SPARC_ONLY("sparc")
-#endif // ZERO
+#endif
 #endif
 
 const char *Abstract_VM_Version::vm_platform_string() {
