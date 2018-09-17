@@ -120,7 +120,7 @@ static const char* load_decode_instructions() {
 
 
 static const char* lookup(void* addr) {
-#if defined(__ia64) || defined(__powerpc__)
+#if defined(__ia64) || (defined(__powerpc__) && !defined(ABI_ELFv2))
   /* On IA64 and PPC function pointers are pointers to function descriptors */
 #define CHECK_NAME(fn) \
   if (addr == *((void**) &fn))  return #fn;
