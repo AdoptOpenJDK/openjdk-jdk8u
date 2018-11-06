@@ -185,7 +185,7 @@ final class WeighNodes extends NodeOperatorVisitor<LexicalContext> {
 
     @Override
     public Node leaveIdentNode(final IdentNode identNode) {
-        weight += ACCESS_WEIGHT + identNode.getName().length() * 2;
+        weight += ACCESS_WEIGHT;
         return identNode;
     }
 
