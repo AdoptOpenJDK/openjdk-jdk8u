@@ -160,6 +160,7 @@ WB_END
 
 #ifdef LINUX
 #include "utilities/elfFile.hpp"
+#include "osContainer_linux.hpp"
 #endif
 
 WB_ENTRY(jlong, WB_GetCompressedOopsMaxHeapSize(JNIEnv* env, jobject o)) {
@@ -169,8 +170,8 @@ WB_END
 
 WB_ENTRY(void, WB_PrintHeapSizes(JNIEnv* env, jobject o)) {
   CollectorPolicy * p = Universe::heap()->collector_policy();
-  gclog_or_tty->print_cr("Minimum heap "SIZE_FORMAT" Initial heap "
-    SIZE_FORMAT" Maximum heap "SIZE_FORMAT" Min alignment "SIZE_FORMAT" Max alignment "SIZE_FORMAT,
+  gclog_or_tty->print_cr("Minimum heap " SIZE_FORMAT " Initial heap "
+    SIZE_FORMAT" Maximum heap " SIZE_FORMAT " Min alignment " SIZE_FORMAT " Max alignment " SIZE_FORMAT,
     p->min_heap_byte_size(), p->initial_heap_byte_size(), p->max_heap_byte_size(),
     p->space_alignment(), p->heap_alignment());
 }
@@ -205,8 +206,8 @@ WB_ENTRY(void, WB_ReadFromNoaccessArea(JNIEnv* env, jobject o))
          Universe::narrow_oop_use_implicit_null_checks() )) {
     tty->print_cr("WB_ReadFromNoaccessArea method is useless:\n "
                   "\tUseCompressedOops is %d\n"
-                  "\trhs.base() is "PTR_FORMAT"\n"
-                  "\tUniverse::narrow_oop_base() is "PTR_FORMAT"\n"
+                  "\trhs.base() is " PTR_FORMAT "\n"
+                  "\tUniverse::narrow_oop_base() is " PTR_FORMAT "\n"
                   "\tUniverse::narrow_oop_use_implicit_null_checks() is %d",
                   UseCompressedOops,
                   rhs.base(),
@@ -259,8 +260,8 @@ static jint wb_stress_virtual_space_resize(size_t reserved_space_size,
 
 WB_ENTRY(jint, WB_StressVirtualSpaceResize(JNIEnv* env, jobject o,
         jlong reserved_space_size, jlong magnitude, jlong iterations))
-  tty->print_cr("reservedSpaceSize="JLONG_FORMAT", magnitude="JLONG_FORMAT", "
-                "iterations="JLONG_FORMAT"\n", reserved_space_size, magnitude,
+  tty->print_cr("reservedSpaceSize=" JLONG_FORMAT ", magnitude=" JLONG_FORMAT ", "
+                "iterations=" JLONG_FORMAT "\n", reserved_space_size, magnitude,
                 iterations);
   if (reserved_space_size < 0 || magnitude < 0 || iterations < 0) {
     tty->print_cr("One of variables printed above is negative. Can't proceed.\n");
@@ -1028,6 +1029,15 @@ WB_ENTRY(jboolean, WB_CheckLibSpecifiesNoexecstack(JNIEnv* env, jobject o, jstri
   return ret;
 WB_END
 
+WB_ENTRY(jboolean, WB_IsContainerized(JNIEnv* env, jobject o))
+  LINUX_ONLY(return OSContainer::is_containerized();)
+  return false;
+WB_END
+
+WB_ENTRY(void, WB_PrintOsInfo(JNIEnv* env, jobject o))
+  os::print_os_info(tty);
+WB_END
+
 #define CC (char*)
 
 static JNINativeMethod methods[] = {
@@ -1141,6 +1151,8 @@ static JNINativeMethod methods[] = {
   {CC"forceSafepoint",     CC"()V",                   (void*)&WB_ForceSafepoint     },
   {CC"checkLibSpecifiesNoexecstack", CC"(Ljava/lang/String;)Z",
                                                       (void*)&WB_CheckLibSpecifiesNoexecstack},
+  {CC"isContainerized",           CC"()Z",            (void*)&WB_IsContainerized },
+  {CC"printOsInfo",               CC"()V",            (void*)&WB_PrintOsInfo },
 };
 
 #undef CC
