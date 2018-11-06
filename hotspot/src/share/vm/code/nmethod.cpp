@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -254,7 +254,8 @@ bool ExceptionCache::match_exception_with_space(Handle exception) {
 
 
 address ExceptionCache::test_address(address addr) {
-  for (int i=0; i<count(); i++) {
+  int limit = count();
+  for (int i = 0; i < limit; i++) {
     if (pc_at(i) == addr) {
       return handler_at(i);
     }
@@ -265,9 +266,11 @@ address ExceptionCache::test_address(address addr) {
 
 bool ExceptionCache::add_address_and_handler(address addr, address handler) {
   if (test_address(addr) == handler) return true;
-  if (count() < cache_size) {
-    set_pc_at(count(),addr);
-    set_handler_at(count(), handler);
+
+  int index = count();
+  if (index < cache_size) {
+    set_pc_at(index, addr);
+    set_handler_at(index, handler);
     increment_count();
     return true;
   }
@@ -380,10 +383,11 @@ void nmethod::add_exception_cache_entry(ExceptionCache* new_entry) {
   assert(new_entry != NULL,"Must be non null");
   assert(new_entry->next() == NULL, "Must be null");
 
-  if (exception_cache() != NULL) {
-    new_entry->set_next(exception_cache());
+  ExceptionCache *ec = exception_cache();
+  if (ec != NULL) {
+    new_entry->set_next(ec);
   }
-  set_exception_cache(new_entry);
+  release_set_exception_cache(new_entry);
 }
 
 void nmethod::clean_exception_cache(BoolObjectClosure* is_alive) {
@@ -1506,7 +1510,7 @@ bool nmethod::make_not_entrant_or_zombie(unsigned int state) {
     if (method() != NULL && (method()->code() == this ||
                              method()->from_compiled_entry() == verified_entry_point())) {
       HandleMark hm;
-      method()->clear_code();
+      method()->clear_code(false /* already owns Patching_lock */);
     }
   } // leave critical region under Patching_lock
 
@@ -1744,12 +1748,11 @@ void static clean_ic_if_metadata_is_dead(CompiledIC *ic, BoolObjectClosure *is_a
     CompiledICHolder* cichk_oop = ic->cached_icholder();
 
     if (mark_on_stack) {
-      Metadata::mark_on_stack(cichk_oop->holder_method());
+      Metadata::mark_on_stack(cichk_oop->holder_metadata());
       Metadata::mark_on_stack(cichk_oop->holder_klass());
     }
 
-    if (cichk_oop->holder_method()->method_holder()->is_loader_alive(is_alive) &&
-        cichk_oop->holder_klass()->is_loader_alive(is_alive)) {
+    if (cichk_oop->is_loader_alive(is_alive)) {
       return;
     }
   } else {
@@ -2176,7 +2179,7 @@ void nmethod::metadata_do(void f(Metadata*)) {
         CompiledIC *ic = CompiledIC_at(&iter);
         if (ic->is_icholder_call()) {
           CompiledICHolder* cichk = ic->cached_icholder();
-          f(cichk->holder_method());
+          f(cichk->holder_metadata());
           f(cichk->holder_klass());
         } else {
           Metadata* ic_oop = ic->cached_metadata();
@@ -2291,7 +2294,7 @@ void nmethod::oops_do_marking_epilogue() {
     assert(cur != NULL, "not NULL-terminated");
     nmethod* next = cur->_oops_do_mark_link;
     cur->_oops_do_mark_link = NULL;
-    cur->verify_oop_relocations();
+    DEBUG_ONLY(cur->verify_oop_relocations());
     NOT_PRODUCT(if (TraceScavenge)  cur->print_on(tty, "oops_do, unmark"));
     cur = next;
   }

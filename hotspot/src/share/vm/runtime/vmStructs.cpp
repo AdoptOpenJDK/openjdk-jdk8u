@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -278,7 +278,7 @@ typedef TwoOopHashtable<Symbol*, mtClass>     SymbolTwoOopHashtable;
   volatile_nonstatic_field(ArrayKlass,         _lower_dimension,                              Klass*)                                \
   nonstatic_field(ArrayKlass,                  _vtable_len,                                   int)                                   \
   nonstatic_field(ArrayKlass,                  _component_mirror,                             oop)                                   \
-  nonstatic_field(CompiledICHolder,     _holder_method,                                Method*)                               \
+  nonstatic_field(CompiledICHolder,     _holder_metadata,                              Metadata*)                             \
   nonstatic_field(CompiledICHolder,     _holder_klass,                                 Klass*)                                \
   nonstatic_field(ConstantPool,         _tags,                                         Array<u1>*)                            \
   nonstatic_field(ConstantPool,         _cache,                                        ConstantPoolCache*)                    \
@@ -879,7 +879,7 @@ typedef TwoOopHashtable<Symbol*, mtClass>     SymbolTwoOopHashtable;
   nonstatic_field(nmethod,             _stack_traversal_mark,                         long)                                  \
   nonstatic_field(nmethod,             _compile_id,                                   int)                                   \
   nonstatic_field(nmethod,             _comp_level,                                   int)                                   \
-  nonstatic_field(nmethod,             _exception_cache,                              ExceptionCache*)                       \
+  volatile_nonstatic_field(nmethod,    _exception_cache,                              ExceptionCache*)                       \
   nonstatic_field(nmethod,             _marked_for_deoptimization,                    bool)                                  \
                                                                                                                              \
   unchecked_c2_static_field(Deoptimization,         _trap_reason_name,                   void*)                              \

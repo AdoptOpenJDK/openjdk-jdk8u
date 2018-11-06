@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -445,7 +445,7 @@ class Method : public Metadata {
   address verified_code_entry();
   bool check_code() const;      // Not inline to avoid circular ref
   nmethod* volatile code() const                 { assert( check_code(), "" ); return (nmethod *)OrderAccess::load_ptr_acquire(&_code); }
-  void clear_code();            // Clear out any compiled code
+  void clear_code(bool acquire_lock = true);            // Clear out any compiled code
   static void set_code(methodHandle mh, nmethod* code);
   void set_adapter_entry(AdapterHandlerEntry* adapter) {  _adapter = adapter; }
   address get_i2c_entry();
@@ -627,6 +627,9 @@ class Method : public Metadata {
   // valid static initializer flags.
   bool is_static_initializer() const;
 
+  // returns true if the method name is <init>
+  bool is_object_initializer() const;
+
   // compiled code support
   // NOTE: code() is inherently racy as deopt can be clearing code
   // simultaneously. Use with caution.
@@ -658,6 +661,7 @@ class Method : public Metadata {
   static ByteSize from_interpreted_offset()      { return byte_offset_of(Method, _from_interpreted_entry ); }
   static ByteSize interpreter_entry_offset()     { return byte_offset_of(Method, _i2i_entry ); }
   static ByteSize signature_handler_offset()     { return in_ByteSize(sizeof(Method) + wordSize);      }
+  static ByteSize itable_index_offset()          { return byte_offset_of(Method, _vtable_index ); }
 
   // for code generation
   static int method_data_offset_in_bytes()       { return offset_of(Method, _method_data); }

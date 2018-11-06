@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -289,11 +289,11 @@ void LinkResolver::lookup_method_in_klasses(methodHandle& result, KlassHandle kl
 // returns first instance method
 // Looks up method in classes, then looks up local default methods
 void LinkResolver::lookup_instance_method_in_klasses(methodHandle& result, KlassHandle klass, Symbol* name, Symbol* signature, TRAPS) {
-  Method* result_oop = klass->uncached_lookup_method(name, signature, Klass::normal);
+  Method* result_oop = klass->uncached_lookup_method(name, signature, Klass::find_overpass);
   result = methodHandle(THREAD, result_oop);
   while (!result.is_null() && result->is_static() && result->method_holder()->super() != NULL) {
     KlassHandle super_klass = KlassHandle(THREAD, result->method_holder()->super());
-    result = methodHandle(THREAD, super_klass->uncached_lookup_method(name, signature, Klass::normal));
+    result = methodHandle(THREAD, super_klass->uncached_lookup_method(name, signature, Klass::find_overpass));
   }
 
   if (klass->oop_is_array()) {
@@ -320,7 +320,9 @@ int LinkResolver::vtable_index_of_interface_method(KlassHandle klass,
   // First check in default method array
   if (!resolved_method->is_abstract() &&
     (InstanceKlass::cast(klass())->default_methods() != NULL)) {
-    int index = InstanceKlass::find_method_index(InstanceKlass::cast(klass())->default_methods(), name, signature, false, false);
+    int index = InstanceKlass::find_method_index(InstanceKlass::cast(klass())->default_methods(),
+                                                 name, signature, Klass::find_overpass,
+                                                 Klass::find_static, Klass::find_private);
     if (index >= 0 ) {
       vtable_index = InstanceKlass::cast(klass())->default_vtable_indices()->at(index);
     }
@@ -538,6 +540,42 @@ void LinkResolver::resolve_method_statically(methodHandle& resolved_method, Klas
   }
 }
 
+void LinkResolver::check_method_loader_constraints(methodHandle& resolved_method,
+                                                   KlassHandle resolved_klass,
+                                                   Symbol* method_name,
+                                                   Symbol* method_signature,
+                                                   KlassHandle current_klass,
+                                                   const char* method_type, TRAPS) {
+  Handle loader (THREAD, InstanceKlass::cast(current_klass())->class_loader());
+  Handle class_loader (THREAD, resolved_method->method_holder()->class_loader());
+  {
+    ResourceMark rm(THREAD);
+    Symbol* failed_type_symbol =
+      SystemDictionary::check_signature_loaders(method_signature, loader,
+                                                class_loader, true, CHECK);
+    if (failed_type_symbol != NULL) {
+      const char* msg = "loader constraint violation: when resolving %s"
+        " \"%s\" the class loader (instance of %s) of the current class, %s,"
+        " and the class loader (instance of %s) for the method's defining class, %s, have"
+        " different Class objects for the type %s used in the signature";
+      char* sig = Method::name_and_sig_as_C_string(resolved_klass(), method_name, method_signature);
+      const char* loader1 = SystemDictionary::loader_name(loader());
+      char* current = InstanceKlass::cast(current_klass())->name()->as_C_string();
+      const char* loader2 = SystemDictionary::loader_name(class_loader());
+      char* target = InstanceKlass::cast(resolved_method->method_holder())
+                     ->name()->as_C_string();
+      char* failed_type_name = failed_type_symbol->as_C_string();
+      size_t buflen = strlen(msg) + strlen(sig) + strlen(loader1) +
+        strlen(current) + strlen(loader2) + strlen(target) +
+        strlen(failed_type_name) + strlen(method_type) + 1;
+      char* buf = NEW_RESOURCE_ARRAY_IN_THREAD(THREAD, char, buflen);
+      jio_snprintf(buf, buflen, msg, method_type, sig, loader1, current, loader2,
+                   target, failed_type_name);
+      THROW_MSG(vmSymbols::java_lang_LinkageError(), buf);
+    }
+  }
+}
+
 void LinkResolver::resolve_method(methodHandle& resolved_method, KlassHandle resolved_klass,
                                   Symbol* method_name, Symbol* method_signature,
                                   KlassHandle current_klass, bool check_access,
@@ -594,34 +632,8 @@ void LinkResolver::resolve_method(methodHandle& resolved_method, KlassHandle res
                                CHECK);
 
     // check loader constraints
-    Handle loader (THREAD, InstanceKlass::cast(current_klass())->class_loader());
-    Handle class_loader (THREAD, resolved_method->method_holder()->class_loader());
-    {
-      ResourceMark rm(THREAD);
-      Symbol* failed_type_symbol =
-        SystemDictionary::check_signature_loaders(method_signature, loader,
-                                                  class_loader, true, CHECK);
-      if (failed_type_symbol != NULL) {
-        const char* msg = "loader constraint violation: when resolving method"
-          " \"%s\" the class loader (instance of %s) of the current class, %s,"
-          " and the class loader (instance of %s) for the method's defining class, %s, have"
-          " different Class objects for the type %s used in the signature";
-        char* sig = Method::name_and_sig_as_C_string(resolved_klass(),method_name,method_signature);
-        const char* loader1 = SystemDictionary::loader_name(loader());
-        char* current = InstanceKlass::cast(current_klass())->name()->as_C_string();
-        const char* loader2 = SystemDictionary::loader_name(class_loader());
-        char* target = InstanceKlass::cast(resolved_method->method_holder())
-                       ->name()->as_C_string();
-        char* failed_type_name = failed_type_symbol->as_C_string();
-        size_t buflen = strlen(msg) + strlen(sig) + strlen(loader1) +
-          strlen(current) + strlen(loader2) + strlen(target) +
-          strlen(failed_type_name) + 1;
-        char* buf = NEW_RESOURCE_ARRAY_IN_THREAD(THREAD, char, buflen);
-        jio_snprintf(buf, buflen, msg, sig, loader1, current, loader2,
-                     target, failed_type_name);
-        THROW_MSG(vmSymbols::java_lang_LinkageError(), buf);
-      }
-    }
+    check_method_loader_constraints(resolved_method, resolved_klass, method_name,
+                                    method_signature, current_klass, "method", CHECK);
   }
 }
 
@@ -670,36 +682,8 @@ void LinkResolver::resolve_interface_method(methodHandle& resolved_method,
                                resolved_method,
                                CHECK);
 
-    HandleMark hm(THREAD);
-    Handle loader (THREAD, InstanceKlass::cast(current_klass())->class_loader());
-    Handle class_loader (THREAD, resolved_method->method_holder()->class_loader());
-    {
-      ResourceMark rm(THREAD);
-      Symbol* failed_type_symbol =
-        SystemDictionary::check_signature_loaders(method_signature, loader,
-                                                  class_loader, true, CHECK);
-      if (failed_type_symbol != NULL) {
-        const char* msg = "loader constraint violation: when resolving "
-          "interface method \"%s\" the class loader (instance of %s) of the "
-          "current class, %s, and the class loader (instance of %s) for "
-          "the method's defining class, %s, have different Class objects for the type %s "
-          "used in the signature";
-        char* sig = Method::name_and_sig_as_C_string(resolved_klass(),method_name,method_signature);
-        const char* loader1 = SystemDictionary::loader_name(loader());
-        char* current = InstanceKlass::cast(current_klass())->name()->as_C_string();
-        const char* loader2 = SystemDictionary::loader_name(class_loader());
-        char* target = InstanceKlass::cast(resolved_method->method_holder())
-                       ->name()->as_C_string();
-        char* failed_type_name = failed_type_symbol->as_C_string();
-        size_t buflen = strlen(msg) + strlen(sig) + strlen(loader1) +
-          strlen(current) + strlen(loader2) + strlen(target) +
-          strlen(failed_type_name) + 1;
-        char* buf = NEW_RESOURCE_ARRAY_IN_THREAD(THREAD, char, buflen);
-        jio_snprintf(buf, buflen, msg, sig, loader1, current, loader2,
-                     target, failed_type_name);
-        THROW_MSG(vmSymbols::java_lang_LinkageError(), buf);
-      }
-    }
+    check_method_loader_constraints(resolved_method, resolved_klass, method_name,
+                                    method_signature, current_klass, "interface method", CHECK);
   }
 
   if (nostatics && resolved_method->is_static()) {
@@ -1049,6 +1033,10 @@ void LinkResolver::runtime_resolve_special_method(CallInfo& result, methodHandle
                   Method::name_and_sig_as_C_string(resolved_klass(),
                                             resolved_method->name(),
                                             resolved_method->signature()));
+      } else if (sel_method() != resolved_method()) {
+        check_method_loader_constraints(sel_method, resolved_klass,
+                                        sel_method->name(), sel_method->signature(),
+                                        current_klass, "method", CHECK);
       }
     }
 
@@ -1203,7 +1191,7 @@ void LinkResolver::runtime_resolve_virtual_method(CallInfo& result,
   assert(resolved_method->method_holder()->is_linked(), "must be linked");
 
   // do lookup based on receiver klass using the vtable index
-  if (resolved_method->method_holder()->is_interface()) { // miranda method
+  if (resolved_method->method_holder()->is_interface()) { // default or miranda method
     vtable_index = vtable_index_of_interface_method(resolved_klass,
                            resolved_method);
     assert(vtable_index >= 0 , "we should have valid vtable index at this point");
@@ -1212,7 +1200,7 @@ void LinkResolver::runtime_resolve_virtual_method(CallInfo& result,
     selected_method = methodHandle(THREAD, inst->method_at_vtable(vtable_index));
   } else {
     // at this point we are sure that resolved_method is virtual and not
-    // a miranda method; therefore, it must have a valid vtable index.
+    // a default or miranda method; therefore, it must have a valid vtable index.
     assert(!resolved_method->has_itable_index(), "");
     vtable_index = resolved_method->vtable_index();
     // We could get a negative vtable_index for final methods,

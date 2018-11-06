@@ -234,6 +234,13 @@ static Node* split_if(IfNode *iff, PhaseIterGVN *igvn) {
       predicate_proj = proj;
     }
   }
+
+  // If all the defs of the phi are the same constant, we already have the desired end state.
+  // Skip the split that would create empty phi and region nodes.
+  if((r->req() - req_c) == 1) {
+    return NULL;
+  }
+
   Node* predicate_c = NULL;
   Node* predicate_x = NULL;
   bool counted_loop = r->is_CountedLoop();
@@ -1081,8 +1088,9 @@ void IfNode::dominated_by( Node *prev_dom, PhaseIterGVN *igvn ) {
   // be skipped. For example, range check predicate has two checks
   // for lower and upper bounds.
   ProjNode* unc_proj = proj_out(1 - prev_dom->as_Proj()->_con)->as_Proj();
-  if (unc_proj->is_uncommon_trap_proj(Deoptimization::Reason_predicate))
-   prev_dom = idom;
+  if ((unc_proj != NULL) && (unc_proj->is_uncommon_trap_proj(Deoptimization::Reason_predicate))) {
+    prev_dom = idom;
+  }
 
   // Now walk the current IfNode's projections.
   // Loop ends when 'this' has no more uses.

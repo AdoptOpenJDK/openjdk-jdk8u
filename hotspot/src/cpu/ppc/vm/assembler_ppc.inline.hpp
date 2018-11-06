@@ -109,6 +109,8 @@ inline void Assembler::mullw(  Register d, Register a, Register b) { emit_int32(
 inline void Assembler::mullw_( Register d, Register a, Register b) { emit_int32(MULLW_OPCODE  | rt(d) | ra(a) | rb(b) | oe(0) | rc(1)); }
 inline void Assembler::mulhw(  Register d, Register a, Register b) { emit_int32(MULHW_OPCODE  | rt(d) | ra(a) | rb(b) | rc(0)); }
 inline void Assembler::mulhw_( Register d, Register a, Register b) { emit_int32(MULHW_OPCODE  | rt(d) | ra(a) | rb(b) | rc(1)); }
+inline void Assembler::mulhwu( Register d, Register a, Register b) { emit_int32(MULHWU_OPCODE | rt(d) | ra(a) | rb(b) | rc(0)); }
+inline void Assembler::mulhwu_(Register d, Register a, Register b) { emit_int32(MULHWU_OPCODE | rt(d) | ra(a) | rb(b) | rc(1)); }
 inline void Assembler::mulhd(  Register d, Register a, Register b) { emit_int32(MULHD_OPCODE  | rt(d) | ra(a) | rb(b) | rc(0)); }
 inline void Assembler::mulhd_( Register d, Register a, Register b) { emit_int32(MULHD_OPCODE  | rt(d) | ra(a) | rb(b) | rc(1)); }
 inline void Assembler::mulhdu( Register d, Register a, Register b) { emit_int32(MULHDU_OPCODE | rt(d) | ra(a) | rb(b) | rc(0)); }
@@ -739,6 +741,7 @@ inline void Assembler::vandc(   VectorRegister d, VectorRegister a, VectorRegist
 inline void Assembler::vnor(    VectorRegister d, VectorRegister a, VectorRegister b) { emit_int32( VNOR_OPCODE     | vrt(d) | vra(a) | vrb(b)); }
 inline void Assembler::vor(     VectorRegister d, VectorRegister a, VectorRegister b) { emit_int32( VOR_OPCODE      | vrt(d) | vra(a) | vrb(b)); }
 inline void Assembler::vxor(    VectorRegister d, VectorRegister a, VectorRegister b) { emit_int32( VXOR_OPCODE     | vrt(d) | vra(a) | vrb(b)); }
+inline void Assembler::vrld(    VectorRegister d, VectorRegister a, VectorRegister b) { emit_int32( VRLD_OPCODE     | vrt(d) | vra(a) | vrb(b)); }
 inline void Assembler::vrlb(    VectorRegister d, VectorRegister a, VectorRegister b) { emit_int32( VRLB_OPCODE     | vrt(d) | vra(a) | vrb(b)); }
 inline void Assembler::vrlw(    VectorRegister d, VectorRegister a, VectorRegister b) { emit_int32( VRLW_OPCODE     | vrt(d) | vra(a) | vrb(b)); }
 inline void Assembler::vrlh(    VectorRegister d, VectorRegister a, VectorRegister b) { emit_int32( VRLH_OPCODE     | vrt(d) | vra(a) | vrb(b)); }
