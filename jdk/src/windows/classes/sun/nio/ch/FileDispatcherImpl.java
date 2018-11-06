@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -83,6 +83,10 @@ class FileDispatcherImpl extends FileDispatcher {
 
     long writev(FileDescriptor fd, long address, int len) throws IOException {
         return writev0(fd, address, len, append);
+    }
+
+    long seek(FileDescriptor fd, long offset) throws IOException {
+        return seek0(fd, offset);
     }
 
     int force(FileDescriptor fd, boolean metaData) throws IOException {
@@ -170,6 +174,8 @@ class FileDispatcherImpl extends FileDispatcher {
 
     static native long writev0(FileDescriptor fd, long address, int len, boolean append)
         throws IOException;
+
+    static native long seek0(FileDescriptor fd, long offset) throws IOException;
 
     static native int force0(FileDescriptor fd, boolean metaData)
         throws IOException;

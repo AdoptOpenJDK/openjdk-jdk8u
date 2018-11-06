@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -261,7 +261,7 @@ public class FileChannelImpl
                     return 0;
                 do {
                     // in append-mode then position is advanced to end before writing
-                    p = (append) ? nd.size(fd) : position0(fd, -1);
+                    p = (append) ? nd.size(fd) : nd.seek(fd, -1);
                 } while ((p == IOStatus.INTERRUPTED) && isOpen());
                 return IOStatus.normalize(p);
             } finally {
@@ -285,7 +285,7 @@ public class FileChannelImpl
                 if (!isOpen())
                     return null;
                 do {
-                    p  = position0(fd, newPosition);
+                    p  = nd.seek(fd, newPosition);
                 } while ((p == IOStatus.INTERRUPTED) && isOpen());
                 return this;
             } finally {
@@ -345,7 +345,7 @@ public class FileChannelImpl
 
                 // get current position
                 do {
-                    p = position0(fd, -1);
+                    p = nd.seek(fd, -1);
                 } while ((p == IOStatus.INTERRUPTED) && isOpen());
                 if (!isOpen())
                     return null;
@@ -364,7 +364,7 @@ public class FileChannelImpl
                 if (p > newSize)
                     p = newSize;
                 do {
-                    rp = position0(fd, p);
+                    rp = nd.seek(fd, p);
                 } while ((rp == IOStatus.INTERRUPTED) && isOpen());
                 return this;
             } finally {
@@ -889,57 +889,62 @@ public class FileChannelImpl
             if (!isOpen())
                 return null;
 
-            long filesize;
-            do {
-                filesize = nd.size(fd);
-            } while ((filesize == IOStatus.INTERRUPTED) && isOpen());
-            if (!isOpen())
-                return null;
-
-            if (filesize < position + size) { // Extend file size
-                if (!writable) {
-                    throw new IOException("Channel not open for writing " +
-                        "- cannot extend file to required size");
-                }
-                int rv;
+            long mapSize;
+            int pagePosition;
+            synchronized (positionLock) {
+                long filesize;
                 do {
-                    rv = nd.truncate(fd, position + size);
-                } while ((rv == IOStatus.INTERRUPTED) && isOpen());
+                    filesize = nd.size(fd);
+                } while ((filesize == IOStatus.INTERRUPTED) && isOpen());
                 if (!isOpen())
                     return null;
-            }
-            if (size == 0) {
-                addr = 0;
-                // a valid file descriptor is not required
-                FileDescriptor dummy = new FileDescriptor();
-                if ((!writable) || (imode == MAP_RO))
-                    return Util.newMappedByteBufferR(0, 0, dummy, null);
-                else
-                    return Util.newMappedByteBuffer(0, 0, dummy, null);
-            }
 
-            int pagePosition = (int)(position % allocationGranularity);
-            long mapPosition = position - pagePosition;
-            long mapSize = size + pagePosition;
-            try {
-                // If no exception was thrown from map0, the address is valid
-                addr = map0(imode, mapPosition, mapSize);
-            } catch (OutOfMemoryError x) {
-                // An OutOfMemoryError may indicate that we've exhausted memory
-                // so force gc and re-attempt map
-                System.gc();
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException y) {
-                    Thread.currentThread().interrupt();
+                if (filesize < position + size) { // Extend file size
+                    if (!writable) {
+                        throw new IOException("Channel not open for writing " +
+                            "- cannot extend file to required size");
+                    }
+                    int rv;
+                    do {
+                        rv = nd.truncate(fd, position + size);
+                    } while ((rv == IOStatus.INTERRUPTED) && isOpen());
+                    if (!isOpen())
+                        return null;
                 }
+
+                if (size == 0) {
+                    addr = 0;
+                    // a valid file descriptor is not required
+                    FileDescriptor dummy = new FileDescriptor();
+                    if ((!writable) || (imode == MAP_RO))
+                        return Util.newMappedByteBufferR(0, 0, dummy, null);
+                    else
+                        return Util.newMappedByteBuffer(0, 0, dummy, null);
+                }
+
+                pagePosition = (int)(position % allocationGranularity);
+                long mapPosition = position - pagePosition;
+                mapSize = size + pagePosition;
                 try {
+                    // If map0 did not throw an exception, the address is valid
                     addr = map0(imode, mapPosition, mapSize);
-                } catch (OutOfMemoryError y) {
-                    // After a second OOME, fail
-                    throw new IOException("Map failed", y);
+                } catch (OutOfMemoryError x) {
+                    // An OutOfMemoryError may indicate that we've exhausted
+                    // memory so force gc and re-attempt map
+                    System.gc();
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException y) {
+                        Thread.currentThread().interrupt();
+                    }
+                    try {
+                        addr = map0(imode, mapPosition, mapSize);
+                    } catch (OutOfMemoryError y) {
+                        // After a second OOME, fail
+                        throw new IOException("Map failed", y);
+                    }
                 }
-            }
+            } // synchronized
 
             // On Windows, and potentially other platforms, we need an open
             // file descriptor for some mapping operations.
@@ -1211,11 +1216,6 @@ public class FileChannelImpl
     // Transfers from src to dst, or returns -2 if kernel can't do that
     private native long transferTo0(FileDescriptor src, long position,
                                     long count, FileDescriptor dst);
-
-    // Sets or reports this file's position
-    // If offset is -1, the current position is returned
-    // otherwise the position is set to offset
-    private native long position0(FileDescriptor fd, long offset);
 
     // Caches fieldIDs
     private static native long initIDs();

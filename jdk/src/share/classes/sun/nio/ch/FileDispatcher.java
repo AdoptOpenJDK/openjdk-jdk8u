@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,6 +35,13 @@ abstract class FileDispatcher extends NativeDispatcher {
     public static final int LOCKED = 0;         // Obtained requested lock
     public static final int RET_EX_LOCK = 1;    // Obtained exclusive lock
     public static final int INTERRUPTED = 2;    // Request interrupted
+
+    /**
+     * Sets or reports this file's position
+     * If offset is -1, the current position is returned
+     * otherwise the position is set to offset.
+     */
+    abstract long seek(FileDescriptor fd, long offset) throws IOException;
 
     abstract int force(FileDescriptor fd, boolean metaData) throws IOException;
 
