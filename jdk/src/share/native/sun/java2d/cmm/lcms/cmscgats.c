@@ -30,7 +30,7 @@
 //---------------------------------------------------------------------------------
 //
 //  Little Color Management System
-//  Copyright (c) 1998-2012 Marti Maria Saguer
+//  Copyright (c) 1998-2016 Marti Maria Saguer
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the "Software"),
@@ -625,7 +625,7 @@ void ReadReal(cmsIT8* it8, int inum)
 }
 
 // Parses a float number
-// This can not call directly atof because it uses locale dependant
+// This can not call directly atof because it uses locale dependent
 // parsing, while CCMX files always use . as decimal separator
 static
 cmsFloat64Number ParseFloatNumber(const char *Buffer)
@@ -830,11 +830,11 @@ void InSymbol(cmsIT8* it8)
 
                     if (it8 ->sy == SINUM) {
 
-                        sprintf(it8->id, "%d", it8->inum);
+                        snprintf(it8->id, 127, "%d", it8->inum);
                     }
                     else {
 
-                        sprintf(it8->id, it8 ->DoubleFormatter, it8->dnum);
+                        snprintf(it8->id, 127, it8 ->DoubleFormatter, it8->dnum);
                     }
 
                     k = (int) strlen(it8 ->id);
@@ -900,7 +900,7 @@ void InSymbol(cmsIT8* it8)
             k = 0;
             NextCh(it8);
 
-            while (k < MAXSTR && it8->ch != sng) {
+            while (k < (MAXSTR-1) && it8->ch != sng) {
 
                 if (it8->ch == '\n'|| it8->ch == '\r') k = MAXSTR+1;
                 else {
@@ -1392,7 +1392,7 @@ cmsBool CMSEXPORT cmsIT8SetPropertyDbl(cmsHANDLE hIT8, const char* cProp, cmsFlo
     cmsIT8* it8 = (cmsIT8*) hIT8;
     char Buffer[1024];
 
-    sprintf(Buffer, it8->DoubleFormatter, Val);
+    snprintf(Buffer, 1023, it8->DoubleFormatter, Val);
 
     return AddToList(it8, &GetTable(it8)->HeaderList, cProp, NULL, Buffer, WRITE_UNCOOKED) != NULL;
 }
@@ -1402,7 +1402,7 @@ cmsBool CMSEXPORT cmsIT8SetPropertyHex(cmsHANDLE hIT8, const char* cProp, cmsUIn
     cmsIT8* it8 = (cmsIT8*) hIT8;
     char Buffer[1024];
 
-    sprintf(Buffer, "%u", Val);
+    snprintf(Buffer, 1023, "%u", Val);
 
     return AddToList(it8, &GetTable(it8)->HeaderList, cProp, NULL, Buffer, WRITE_HEXADECIMAL) != NULL;
 }
@@ -1846,7 +1846,7 @@ cmsBool CMSEXPORT cmsIT8SaveToMem(cmsHANDLE hIT8, void *MemPtr, cmsUInt32Number*
 }
 
 
-// -------------------------------------------------------------- Higer level parsing
+// -------------------------------------------------------------- Higher level parsing
 
 static
 cmsBool DataFormatSection(cmsIT8* it8)
@@ -2053,14 +2053,18 @@ cmsBool HeaderSection(cmsIT8* it8)
 static
 void ReadType(cmsIT8* it8, char* SheetTypePtr)
 {
+    cmsInt32Number cnt = 0;
+
     // First line is a very special case.
 
     while (isseparator(it8->ch))
             NextCh(it8);
 
-    while (it8->ch != '\r' && it8 ->ch != '\n' && it8->ch != '\t' && it8 -> ch != -1) {
+    while (it8->ch != '\r' && it8 ->ch != '\n' && it8->ch != '\t' && it8 -> ch != 0) {
 
         *SheetTypePtr++= (char) it8 ->ch;
+        if (cnt++ < MAXSTR)
+            *SheetTypePtr++= (char) it8 ->ch;
         NextCh(it8);
     }
 
@@ -2149,7 +2153,7 @@ cmsBool ParseIT8(cmsIT8* it8, cmsBool nosheet)
 
 
 
-// Init usefull pointers
+// Init useful pointers
 
 static
 void CookPointers(cmsIT8* it8)
@@ -2253,7 +2257,7 @@ void CookPointers(cmsIT8* it8)
 // that should be something like some printable characters plus a \n
 // returns 0 if this is not like a CGATS, or an integer otherwise. This integer is the number of words in first line?
 static
-int IsMyBlock(cmsUInt8Number* Buffer, int n)
+int IsMyBlock(const cmsUInt8Number* Buffer, int n)
 {
     int words = 1, space = 0, quot = 0;
     int i;
@@ -2317,7 +2321,7 @@ cmsBool IsMyFile(const char* FileName)
 // ---------------------------------------------------------- Exported routines
 
 
-cmsHANDLE  CMSEXPORT cmsIT8LoadFromMem(cmsContext ContextID, void *Ptr, cmsUInt32Number len)
+cmsHANDLE  CMSEXPORT cmsIT8LoadFromMem(cmsContext ContextID, const void *Ptr, cmsUInt32Number len)
 {
     cmsHANDLE hIT8;
     cmsIT8*  it8;
@@ -2326,7 +2330,7 @@ cmsHANDLE  CMSEXPORT cmsIT8LoadFromMem(cmsContext ContextID, void *Ptr, cmsUInt3
     _cmsAssert(Ptr != NULL);
     _cmsAssert(len != 0);
 
-    type = IsMyBlock((cmsUInt8Number*)Ptr, len);
+    type = IsMyBlock((const cmsUInt8Number*)Ptr, len);
     if (type == 0) return NULL;
 
     hIT8 = cmsIT8Alloc(ContextID);
@@ -2546,9 +2550,9 @@ int LocateSample(cmsIT8* it8, const char* cSample)
 
         fld = GetDataFormat(it8, i);
         if (fld != NULL) {
-        if (cmsstrcasecmp(fld, cSample) == 0)
-            return i;
-    }
+            if (cmsstrcasecmp(fld, cSample) == 0)
+                return i;
+        }
     }
 
     return -1;
@@ -2606,7 +2610,7 @@ cmsBool CMSEXPORT cmsIT8SetDataRowColDbl(cmsHANDLE hIT8, int row, int col, cmsFl
 
     _cmsAssert(hIT8 != NULL);
 
-    sprintf(Buff, it8->DoubleFormatter, Val);
+    snprintf(Buff, 255, it8->DoubleFormatter, Val);
 
     return SetData(it8, row, col, Buff);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,6 +33,7 @@ import javax.crypto.spec.DHParameterSpec;
 import javax.crypto.spec.DHGenParameterSpec;
 
 import sun.security.provider.ParameterCache;
+import static sun.security.util.SecurityProviderConstants.DEF_DH_KEY_SIZE;
 
 /**
  * This class represents the key pair generator for Diffie-Hellman key pairs.
@@ -42,8 +43,7 @@ import sun.security.provider.ParameterCache;
  * <ul>
  * <li>By providing the size in bits of the prime modulus -
  * This will be used to create a prime modulus and base generator, which will
- * then be used to create the Diffie-Hellman key pair. The default size of the
- * prime modulus is 1024 bits.
+ * then be used to create the Diffie-Hellman key pair.
  * <li>By providing a prime modulus and base generator
  * </ul>
  *
@@ -68,16 +68,16 @@ public final class DHKeyPairGenerator extends KeyPairGeneratorSpi {
 
     public DHKeyPairGenerator() {
         super();
-        initialize(1024, null);
+        initialize(DEF_DH_KEY_SIZE, null);
     }
 
     private static void checkKeySize(int keysize)
             throws InvalidParameterException {
 
-        if ((keysize < 512) || (keysize > 2048) || ((keysize & 0x3F) != 0)) {
+        if ((keysize < 512) || (keysize > 8192) || ((keysize & 0x3F) != 0)) {
             throw new InvalidParameterException(
                     "DH key size must be multiple of 64, and can only range " +
-                    "from 512 to 2048 (inclusive). " +
+                    "from 512 to 8192 (inclusive). " +
                     "The specific key size " + keysize + " is not supported");
         }
     }
@@ -91,12 +91,23 @@ public final class DHKeyPairGenerator extends KeyPairGeneratorSpi {
      * @param random the source of randomness
      */
     public void initialize(int keysize, SecureRandom random) {
+
         checkKeySize(keysize);
+
+        // Use the built-in parameters (ranging from 512 to 8192)
+        // when available.
+        this.params = ParameterCache.getCachedDHParameterSpec(keysize);
+
+        // Due to performance issue, only support DH parameters generation
+        // up to 1024 bits.
+        if ((this.params == null) && (keysize > 1024)) {
+            throw new InvalidParameterException(
+                "Unsupported " + keysize + "-bit DH parameter generation");
+        }
 
         this.pSize = keysize;
         this.lSize = 0;
         this.random = random;
-        this.params = null;
     }
 
     /**

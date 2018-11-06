@@ -43,7 +43,7 @@
 #define SCROLL_PHASE_UNSUPPORTED 1
 #define SCROLL_PHASE_BEGAN 2
 #define SCROLL_PHASE_CONTINUED 3
-#define SCROLL_PHASE_CANCELLED 4
+#define SCROLL_PHASE_MOMENTUM_BEGAN 4
 #define SCROLL_PHASE_ENDED 5
 
 int gNumberOfButtons;
@@ -57,26 +57,43 @@ static long eventCount;
     return eventCount;
 }
 
-+ (void) eventCountPlusPlus{    
++ (void) eventCountPlusPlus{
     eventCount++;
 }
 
 + (jint) scrollStateWithEvent: (NSEvent*) event {
-
+    
     if ([event type] != NSScrollWheel) {
         return 0;
     }
-
-    NSEventPhase phase = [event phase];
-    NSEventPhase momentumPhase = [event momentumPhase];
-
-    if (!phase && !momentumPhase) return SCROLL_PHASE_UNSUPPORTED;
-    switch (phase) {
-        case NSEventPhaseBegan: return SCROLL_PHASE_BEGAN;
-        case NSEventPhaseCancelled: return SCROLL_PHASE_CANCELLED;
-        case NSEventPhaseEnded: return SCROLL_PHASE_ENDED;
+    
+    if ([event phase]) {
+        // process a phase of manual scrolling
+        switch ([event phase]) {
+            case NSEventPhaseBegan: return SCROLL_PHASE_BEGAN;
+            case NSEventPhaseCancelled: return SCROLL_PHASE_ENDED;
+            case NSEventPhaseEnded: return SCROLL_PHASE_ENDED;
+            default: return SCROLL_PHASE_CONTINUED;
+        }
     }
-    return SCROLL_PHASE_CONTINUED;
+    
+    if ([event momentumPhase]) {
+        // process a phase of automatic scrolling
+        switch ([event momentumPhase]) {
+            case NSEventPhaseBegan: return SCROLL_PHASE_MOMENTUM_BEGAN;
+            case NSEventPhaseCancelled: return SCROLL_PHASE_ENDED;
+            case NSEventPhaseEnded: return SCROLL_PHASE_ENDED;
+            default: return SCROLL_PHASE_CONTINUED;
+        }
+    }
+    // phase and momentum phase both are not set
+    return SCROLL_PHASE_UNSUPPORTED;
+}
+
++ (BOOL) hasPreciseScrollingDeltas: (NSEvent*) event {
+    return [event type] == NSScrollWheel
+    && [event respondsToSelector:@selector(hasPreciseScrollingDeltas)]
+    && [event hasPreciseScrollingDeltas];
 }
 @end
 
@@ -114,24 +131,34 @@ static long eventCount;
 JNIEXPORT jboolean JNICALL Java_sun_lwawt_macosx_LWCToolkit_nativeSyncQueue
 (JNIEnv *env, jobject self, jlong timeout)
 {
-    int currentEventNum = [AWTToolkit getEventCount];
+    long currentEventNum = [AWTToolkit getEventCount];
 
     NSApplication* sharedApp = [NSApplication sharedApplication];
     if ([sharedApp isKindOfClass:[NSApplicationAWT class]]) {
         NSApplicationAWT* theApp = (NSApplicationAWT*)sharedApp;
-        [theApp postDummyEvent];
-        [theApp waitForDummyEvent];
+        // We use two different API to post events to the application,
+        //  - [NSApplication postEvent]
+        //  - CGEventPost(), see CRobot.m
+        // It was found that if we post an event via CGEventPost in robot and
+        // immediately after this we will post the second event via
+        // [NSApp postEvent] then sometimes the second event will be handled
+        // first. The opposite isn't proved, but we use both here to be safer.
+        [theApp postDummyEvent:false];
+        [theApp waitForDummyEvent:timeout / 2.0];
+        [theApp postDummyEvent:true];
+        [theApp waitForDummyEvent:timeout / 2.0];
+
     } else {
         // could happen if we are embedded inside SWT application,
-        // in this case just spin a single empty block through 
+        // in this case just spin a single empty block through
         // the event loop to give it a chance to process pending events
         [JNFRunLoop performOnMainThreadWaiting:YES withBlock:^(){}];
     }
-    
+
     if (([AWTToolkit getEventCount] - currentEventNum) != 0) {
         return JNI_TRUE;
     }
-        
+
     return JNI_FALSE;
 }
 
@@ -306,7 +333,7 @@ JNF_COCOA_ENTER(env);
                                              beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.010]];
         if (processEvents) {
             //We do not spin a runloop here as date is nil, so does not matter which mode to use
-            // Processing all events excluding NSApplicationDefined which need to be processed 
+            // Processing all events excluding NSApplicationDefined which need to be processed
             // on the main loop only (those events are intended for disposing resources)
             NSEvent *event;
             if ((event = [NSApp nextEventMatchingMask:(NSAnyEventMask & ~NSApplicationDefinedMask)

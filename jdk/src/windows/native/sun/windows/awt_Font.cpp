@@ -844,11 +844,16 @@ Java_sun_awt_windows_WFontMetrics_charsWidth(JNIEnv *env, jobject self,
 
     if (str == NULL) {
         JNU_ThrowNullPointerException(env, "str argument");
-        return NULL;
+        return 0;
     }
-    if ((len < 0) || (off < 0) || (len + off > (env->GetArrayLength(str)))) {
+    if ((len < 0) || (off < 0) || (len + off < 0) ||
+        (len + off > (env->GetArrayLength(str)))) {
         JNU_ThrowArrayIndexOutOfBoundsException(env, "off/len argument");
-        return NULL;
+        return 0;
+    }
+
+    if (off == env->GetArrayLength(str)) {
+        return 0;
     }
 
     jchar *strp = new jchar[len];
@@ -880,12 +885,18 @@ Java_sun_awt_windows_WFontMetrics_bytesWidth(JNIEnv *env, jobject self,
 
     if (str == NULL) {
         JNU_ThrowNullPointerException(env, "bytes argument");
-        return NULL;
+        return 0;
     }
-    if ((len < 0) || (off < 0) || (len + off > (env->GetArrayLength(str)))) {
+    if ((len < 0) || (off < 0) || (len + off < 0) ||
+        (len + off > (env->GetArrayLength(str)))) {
         JNU_ThrowArrayIndexOutOfBoundsException(env, "off or len argument");
-        return NULL;
+        return 0;
     }
+
+    if (off == env->GetArrayLength(str)) {
+        return 0;
+    }
+
     char *pStrBody = NULL;
     jint result = 0;
     try {
@@ -893,12 +904,12 @@ Java_sun_awt_windows_WFontMetrics_bytesWidth(JNIEnv *env, jobject self,
                                                          AwtFont::widthsID);
         if (array == NULL) {
             JNU_ThrowNullPointerException(env, "Can't access widths array.");
-            return NULL;
+            return 0;
         }
         pStrBody = (char *)env->GetPrimitiveArrayCritical(str, 0);
         if (pStrBody == NULL) {
             JNU_ThrowNullPointerException(env, "Can't access str bytes.");
-            return NULL;
+            return 0;
         }
         char *pStr = pStrBody + off;
 
@@ -908,7 +919,7 @@ Java_sun_awt_windows_WFontMetrics_bytesWidth(JNIEnv *env, jobject self,
             if (widths == NULL) {
                 env->ReleasePrimitiveArrayCritical(str, pStrBody, 0);
                 JNU_ThrowNullPointerException(env, "Can't access widths.");
-                return NULL;
+                return 0;
             }
             for (; len; len--) {
                 result += widths[*pStr++];
@@ -1651,6 +1662,8 @@ CSegTable* CSegTableManager::GetTable(LPCWSTR lpszFontName, BOOL fEUDC)
 
 CSegTableManager g_segTableManager;
 
+#define KEYLEN 16
+
 class CCombinedSegTable : public CSegTableComponent
 {
 public:
@@ -1661,7 +1674,7 @@ public:
 private:
     LPSTR GetCodePageSubkey();
     void GetEUDCFileName(LPWSTR lpszFileName, int cchFileName);
-    static char m_szCodePageSubkey[16];
+    static char m_szCodePageSubkey[KEYLEN];
     static WCHAR m_szDefaultEUDCFile[_MAX_PATH];
     static BOOL m_fEUDCSubKeyExist;
     static BOOL m_fTTEUDCFileExist;
@@ -1669,7 +1682,7 @@ private:
     CEUDCSegTable* m_pEUDCSegTable;
 };
 
-char CCombinedSegTable::m_szCodePageSubkey[16] = "";
+char CCombinedSegTable::m_szCodePageSubkey[KEYLEN] = "";
 
 WCHAR CCombinedSegTable::m_szDefaultEUDCFile[_MAX_PATH] = L"";
 
@@ -1701,8 +1714,11 @@ LPSTR CCombinedSegTable::GetCodePageSubkey()
     }
     lpszCP++; // cf lpszCP = "932"
 
-    char szSubKey[80];
+    char szSubKey[KEYLEN];
     strcpy(szSubKey, "EUDC\\");
+    if ((strlen(szSubKey) + strlen(lpszCP)) >= KEYLEN) {
+        return NULL;
+    }
     strcpy(&(szSubKey[strlen(szSubKey)]), lpszCP);
     strcpy(m_szCodePageSubkey, szSubKey);
     return m_szCodePageSubkey;

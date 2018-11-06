@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,15 +34,18 @@ import java.security.NoSuchProviderException;
 import java.security.InvalidParameterException;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.security.ProviderException;
 import java.security.spec.AlgorithmParameterSpec;
 import java.security.spec.InvalidParameterSpecException;
 import java.security.spec.DSAParameterSpec;
 import java.security.spec.DSAGenParameterSpec;
 
+import static sun.security.util.SecurityProviderConstants.DEF_DSA_KEY_SIZE;
+import static sun.security.util.SecurityProviderConstants.getDefDSASubprimeSize;
+
+
 /**
- * This class generates parameters for the DSA algorithm. It uses a default
- * prime modulus size of 1024 bits, which can be overwritten during
- * initialization.
+ * This class generates parameters for the DSA algorithm.
  *
  * @author Jan Luehe
  *
@@ -56,10 +59,6 @@ import java.security.spec.DSAGenParameterSpec;
 
 public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
 
-    // the default parameters
-    private static final DSAGenParameterSpec DEFAULTS =
-        new DSAGenParameterSpec(1024, 160, 160);
-
     // the length of prime P, subPrime Q, and seed in bits
     private int valueL = -1;
     private int valueN = -1;
@@ -69,7 +68,6 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
     private SecureRandom random;
 
     // useful constants
-    private static final BigInteger ZERO = BigInteger.valueOf(0);
     private static final BigInteger ONE = BigInteger.valueOf(1);
     private static final BigInteger TWO = BigInteger.valueOf(2);
 
@@ -83,18 +81,21 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
      * @param strength the strength (size of prime) in bits
      * @param random the source of randomness
      */
+    @Override
     protected void engineInit(int strength, SecureRandom random) {
         if ((strength >= 512) && (strength <= 1024) && (strength % 64 == 0)) {
             this.valueN = 160;
         } else if (strength == 2048) {
             this.valueN = 224;
-//      } else if (strength == 3072) {
-//          this.valueN = 256;
+        } else if (strength == 3072) {
+            this.valueN = 256;
         } else {
-            throw new InvalidParameterException
-                ("Prime size should be 512 - 1024, or 2048");
+            throw new InvalidParameterException(
+                "Unexpected strength (size of prime): " + strength + ". " +
+                "Prime size should be 512 - 1024, or 2048, 3072");
         }
         this.valueL = strength;
+        this.valueN = getDefDSASubprimeSize(strength);
         this.seedLen = valueN;
         this.random = random;
     }
@@ -103,26 +104,23 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
      * Initializes this parameter generator with a set of
      * algorithm-specific parameter generation values.
      *
-     * @param genParamSpec the set of algorithm-specific parameter generation values
+     * @param genParamSpec the set of algorithm-specific parameter
+     *        generation values
      * @param random the source of randomness
      *
      * @exception InvalidAlgorithmParameterException if the given parameter
      * generation values are inappropriate for this parameter generator
      */
+    @Override
     protected void engineInit(AlgorithmParameterSpec genParamSpec,
-                              SecureRandom random)
-        throws InvalidAlgorithmParameterException {
+            SecureRandom random) throws InvalidAlgorithmParameterException {
         if (!(genParamSpec instanceof DSAGenParameterSpec)) {
             throw new InvalidAlgorithmParameterException("Invalid parameter");
         }
-        DSAGenParameterSpec dsaGenParams = (DSAGenParameterSpec) genParamSpec;
-        int primePLen = dsaGenParams.getPrimePLength();
-        if (primePLen > 2048) {
-            throw new InvalidParameterException
-                ("No support for prime size " + primePLen);
-        }
+        DSAGenParameterSpec dsaGenParams = (DSAGenParameterSpec)genParamSpec;
+
         // directly initialize using the already validated values
-        this.valueL = primePLen;
+        this.valueL = dsaGenParams.getPrimePLength();
         this.valueN = dsaGenParams.getSubprimeQLength();
         this.seedLen = dsaGenParams.getSeedLength();
         this.random = random;
@@ -133,6 +131,7 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
      *
      * @return the new AlgorithmParameters object
      */
+    @Override
     protected AlgorithmParameters engineGenerateParameters() {
         AlgorithmParameters algParams = null;
         try {
@@ -140,11 +139,7 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
                 this.random = new SecureRandom();
             }
             if (valueL == -1) {
-                try {
-                    engineInit(DEFAULTS, this.random);
-                } catch (InvalidAlgorithmParameterException iape) {
-                    // should never happen
-                }
+                engineInit(DEF_DSA_KEY_SIZE, this.random);
             }
             BigInteger[] pAndQ = generatePandQ(this.random, valueL,
                                                valueN, seedLen);
@@ -211,12 +206,17 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
         byte[] seedBytes = new byte[seedLen/8];
         BigInteger twoSl = TWO.pow(seedLen);
         int primeCertainty = 80; // for 1024-bit prime P
-        if (valueL == 2048) {
+        if (valueL <= 1024) {
+            primeCertainty = 80;
+        } else if (valueL == 2048) {
             primeCertainty = 112;
-            //} else if (valueL == 3072) {
-            //    primeCertainty = 128;
+        } else if (valueL == 3072) {
+            primeCertainty = 128;
         }
 
+        if (primeCertainty < 0) {
+            throw new ProviderException("Invalid valueL: " + valueL);
+        }
         BigInteger resultP, resultQ, seed = null;
         int counter;
         while (true) {
@@ -230,7 +230,10 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
                     mod(TWO.pow(valueN - 1));
 
                 /* Step 7 */
-                resultQ = TWO.pow(valueN - 1).add(U).add(ONE). subtract(U.mod(TWO));
+                resultQ = TWO.pow(valueN - 1)
+                            .add(U)
+                            .add(ONE)
+                            .subtract(U.mod(TWO));
             } while (!resultQ.isProbablePrime(primeCertainty));
 
             /* Step 10 */
@@ -250,7 +253,8 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
                 for (int i = 1; i < n; i++) {
                     W = W.add(V[i].multiply(TWO.pow(i * outLen)));
                 }
-                W = W.add((V[n].mod(TWO.pow(b))).multiply(TWO.pow(n * outLen)));
+                W = W.add((V[n].mod(TWO.pow(b)))
+                               .multiply(TWO.pow(n * outLen)));
                 /* Step 11.3 */
                 BigInteger twoLm1 = TWO.pow(valueL - 1);
                 BigInteger X = W.add(twoLm1);

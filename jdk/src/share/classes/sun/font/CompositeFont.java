@@ -93,20 +93,25 @@ public final class CompositeFont extends Font2D {
          * better that it is handled internally to the CompositeFont class.
          */
         if (fm.getEUDCFont() != null) {
+            int msCnt = numMetricsSlots;
+            int fbCnt = numSlots - msCnt;
             numSlots++;
             if (componentNames != null) {
                 componentNames = new String[numSlots];
-                System.arraycopy(compNames, 0, componentNames, 0, numSlots-1);
-                componentNames[numSlots-1] =
-                    fm.getEUDCFont().getFontName(null);
+                System.arraycopy(compNames, 0, componentNames, 0, msCnt);
+                componentNames[msCnt] = fm.getEUDCFont().getFontName(null);
+                System.arraycopy(compNames, msCnt,
+                                 componentNames, msCnt+1, fbCnt);
             }
             if (componentFileNames != null) {
                 componentFileNames = new String[numSlots];
                 System.arraycopy(compFileNames, 0,
-                                  componentFileNames, 0, numSlots-1);
+                                  componentFileNames, 0, msCnt);
+                System.arraycopy(compFileNames, msCnt,
+                                  componentFileNames, msCnt+1, fbCnt);
             }
             components = new PhysicalFont[numSlots];
-            components[numSlots-1] = fm.getEUDCFont();
+            components[msCnt] = fm.getEUDCFont();
             deferredInitialisation = new boolean[numSlots];
             if (defer) {
                 for (int i=0; i<numSlots-1; i++) {
@@ -147,6 +152,25 @@ public final class CompositeFont extends Font2D {
         } else {
             familyName = fullName;
         }
+    }
+
+    /*
+     * Build a composite from a set of individual slot fonts.
+     */
+    CompositeFont(PhysicalFont[] slotFonts) {
+
+        isStdComposite = false;
+        handle = new Font2DHandle(this);
+        fullName = slotFonts[0].fullName;
+        familyName = slotFonts[0].familyName;
+        style = slotFonts[0].style;
+
+        numMetricsSlots = 1; /* Only the physical Font */
+        numSlots = slotFonts.length;
+
+        components = new PhysicalFont[numSlots];
+        System.arraycopy(slotFonts, 0, components, 0, numSlots);
+        deferredInitialisation = new boolean[numSlots]; // all false.
     }
 
     /* This method is currently intended to be called only from

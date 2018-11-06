@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,10 +33,12 @@ import java.security.spec.*;
 import javax.crypto.spec.DHParameterSpec;
 
 import sun.security.provider.ParameterCache;
+import static sun.security.util.SecurityProviderConstants.*;
 
 import static sun.security.pkcs11.TemplateManager.*;
 import sun.security.pkcs11.wrapper.*;
 import static sun.security.pkcs11.wrapper.PKCS11Constants.*;
+
 
 import sun.security.rsa.RSAKeyFactory;
 
@@ -98,7 +100,7 @@ final class P11KeyPairGenerator extends KeyPairGeneratorSpi {
         // override lower limit to disallow unsecure keys being generated
         // override upper limit to deter DOS attack
         if (algorithm.equals("EC")) {
-            keySize = 256;
+            keySize = DEF_EC_KEY_SIZE;
             if ((minKeyLen == -1) || (minKeyLen < 112)) {
                 minKeyLen = 112;
             }
@@ -106,8 +108,13 @@ final class P11KeyPairGenerator extends KeyPairGeneratorSpi {
                 maxKeyLen = 2048;
             }
         } else {
-            // RSA, DH, and DSA
-            keySize = 1024;
+            if (algorithm.equals("DSA")) {
+                keySize = DEF_DSA_KEY_SIZE;
+            } else if (algorithm.equals("RSA")) {
+                keySize = DEF_RSA_KEY_SIZE;
+            } else {
+                keySize = DEF_DH_KEY_SIZE;
+            }
             if ((minKeyLen == -1) || (minKeyLen < 512)) {
                 minKeyLen = 512;
             }
@@ -134,6 +141,7 @@ final class P11KeyPairGenerator extends KeyPairGeneratorSpi {
     }
 
     // see JCA spec
+    @Override
     public void initialize(int keySize, SecureRandom random) {
         token.ensureValid();
         try {
@@ -155,6 +163,7 @@ final class P11KeyPairGenerator extends KeyPairGeneratorSpi {
     }
 
     // see JCA spec
+    @Override
     public void initialize(AlgorithmParameterSpec params, SecureRandom random)
             throws InvalidAlgorithmParameterException {
         token.ensureValid();
@@ -166,7 +175,7 @@ final class P11KeyPairGenerator extends KeyPairGeneratorSpi {
             }
             DHParameterSpec dhParams = (DHParameterSpec) params;
             tmpKeySize = dhParams.getP().bitLength();
-            checkKeySize(tmpKeySize, null);
+            checkKeySize(tmpKeySize, dhParams);
             // XXX sanity check params
         } else if (algorithm.equals("RSA")) {
             if (params instanceof RSAKeyGenParameterSpec == false) {
@@ -188,7 +197,7 @@ final class P11KeyPairGenerator extends KeyPairGeneratorSpi {
             }
             DSAParameterSpec dsaParams = (DSAParameterSpec) params;
             tmpKeySize = dsaParams.getP().bitLength();
-            checkKeySize(tmpKeySize, null);
+            checkKeySize(tmpKeySize, dsaParams);
             // XXX sanity check params
         } else if (algorithm.equals("EC")) {
             ECParameterSpec ecParams;
@@ -213,7 +222,7 @@ final class P11KeyPairGenerator extends KeyPairGeneratorSpi {
                     ("ECParameterSpec or ECGenParameterSpec required for EC");
             }
             tmpKeySize = ecParams.getCurve().getField().getFieldSize();
-            checkKeySize(tmpKeySize, null);
+            checkKeySize(tmpKeySize, ecParams);
         } else {
             throw new ProviderException("Unknown algorithm: " + algorithm);
         }
@@ -222,8 +231,7 @@ final class P11KeyPairGenerator extends KeyPairGeneratorSpi {
         this.random = random;
     }
 
-    // NOTE: 'params' is only used for checking RSA keys currently.
-    private void checkKeySize(int keySize, RSAKeyGenParameterSpec params)
+    private void checkKeySize(int keySize, AlgorithmParameterSpec params)
         throws InvalidAlgorithmParameterException {
         // check native range first
         if ((minKeySize != -1) && (keySize < minKeySize)) {
@@ -260,7 +268,8 @@ final class P11KeyPairGenerator extends KeyPairGeneratorSpi {
             if (algorithm.equals("RSA")) {
                 BigInteger tmpExponent = rsaPublicExponent;
                 if (params != null) {
-                    tmpExponent = params.getPublicExponent();
+                    tmpExponent =
+                        ((RSAKeyGenParameterSpec)params).getPublicExponent();
                 }
                 try {
                     // Reuse the checking in SunRsaSign provider.
@@ -270,10 +279,10 @@ final class P11KeyPairGenerator extends KeyPairGeneratorSpi {
                         minKeySize,
                         (maxKeySize==-1? Integer.MAX_VALUE:maxKeySize));
                 } catch (InvalidKeyException e) {
-                    throw new InvalidAlgorithmParameterException(e.getMessage());
+                    throw new InvalidAlgorithmParameterException(e);
                 }
-            } else {
-                if (algorithm.equals("DH") && (params != null)) {
+            } else if (algorithm.equals("DH")) {
+                if (params != null) {   // initialized with specified parameters
                     // sanity check, nobody really wants keys this large
                     if (keySize > 64 * 1024) {
                         throw new InvalidAlgorithmParameterException(
@@ -281,24 +290,44 @@ final class P11KeyPairGenerator extends KeyPairGeneratorSpi {
                             "The specific key size " +
                             keySize + " is not supported");
                     }
-                } else {
-                    // this restriction is in the spec for DSA
-                    // since we currently use DSA parameters for DH as well,
-                    // it also applies to DH if no parameters are specified
-                    if ((keySize != 2048) &&
-                        ((keySize > 1024) || ((keySize & 0x3f) != 0))) {
-                        throw new InvalidAlgorithmParameterException(algorithm +
-                            " key must be multiples of 64 if less than 1024 bits" +
-                            ", or 2048 bits. " +
+                } else {        // default parameters will be used.
+                    // Range is based on the values in
+                    // sun.security.provider.ParameterCache class.
+                    if ((keySize > 8192) || (keySize < 512) ||
+                            ((keySize & 0x3f) != 0)) {
+                        throw new InvalidAlgorithmParameterException(
+                            "DH key size must be multiple of 64, and can " +
+                            "only range from 512 to 8192 (inclusive). " +
                             "The specific key size " +
                             keySize + " is not supported");
                     }
+
+                    DHParameterSpec cache =
+                            ParameterCache.getCachedDHParameterSpec(keySize);
+                    // Except 2048 and 3072, not yet support generation of
+                    // parameters bigger than 1024 bits.
+                    if ((cache == null) && (keySize > 1024)) {
+                        throw new InvalidAlgorithmParameterException(
+                                "Unsupported " + keySize +
+                                "-bit DH parameter generation");
+                    }
+                }
+            } else {
+                // this restriction is in the spec for DSA
+                if ((keySize != 3072) && (keySize != 2048) &&
+                        ((keySize > 1024) || ((keySize & 0x3f) != 0))) {
+                    throw new InvalidAlgorithmParameterException(
+                        "DSA key must be multiples of 64 if less than " +
+                        "1024 bits, or 2048, 3072 bits. " +
+                        "The specific key size " +
+                        keySize + " is not supported");
                 }
             }
         }
     }
 
     // see JCA spec
+    @Override
     public KeyPair generateKeyPair() {
         token.ensureValid();
         CK_ATTRIBUTE[] publicKeyTemplate;
