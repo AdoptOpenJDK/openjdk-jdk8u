@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2008, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -391,12 +391,12 @@ vmIntrinsics::ID MethodHandles::signature_polymorphic_name_id(Klass* klass, Symb
 // convert the external string or reflective type to an internal signature
 Symbol* MethodHandles::lookup_signature(oop type_str, bool intern_if_not_found, TRAPS) {
   if (java_lang_invoke_MethodType::is_instance(type_str)) {
-    return java_lang_invoke_MethodType::as_signature(type_str, intern_if_not_found, CHECK_NULL);
+    return java_lang_invoke_MethodType::as_signature(type_str, intern_if_not_found, THREAD);
   } else if (java_lang_Class::is_instance(type_str)) {
-    return java_lang_Class::as_signature(type_str, false, CHECK_NULL);
+    return java_lang_Class::as_signature(type_str, false, THREAD);
   } else if (java_lang_String::is_instance(type_str)) {
     if (intern_if_not_found) {
-      return java_lang_String::as_symbol(type_str, CHECK_NULL);
+      return java_lang_String::as_symbol(type_str, THREAD);
     } else {
       return java_lang_String::as_symbol_or_null(type_str);
     }
@@ -1329,40 +1329,40 @@ JVM_END
 #define LANG "Ljava/lang/"
 #define JLINV "Ljava/lang/invoke/"
 
-#define OBJ   LANG"Object;"
-#define CLS   LANG"Class;"
-#define STRG  LANG"String;"
-#define CS    JLINV"CallSite;"
-#define MT    JLINV"MethodType;"
-#define MH    JLINV"MethodHandle;"
-#define MEM   JLINV"MemberName;"
+#define OBJ   LANG "Object;"
+#define CLS   LANG "Class;"
+#define STRG  LANG "String;"
+#define CS    JLINV "CallSite;"
+#define MT    JLINV "MethodType;"
+#define MH    JLINV "MethodHandle;"
+#define MEM   JLINV "MemberName;"
 
 #define CC (char*)  /*cast a literal from (const char*)*/
 #define FN_PTR(f) CAST_FROM_FN_PTR(void*, &f)
 
 // These are the native methods on java.lang.invoke.MethodHandleNatives.
 static JNINativeMethod MHN_methods[] = {
-  {CC"init",                      CC"("MEM""OBJ")V",                     FN_PTR(MHN_init_Mem)},
-  {CC"expand",                    CC"("MEM")V",                          FN_PTR(MHN_expand_Mem)},
-  {CC"resolve",                   CC"("MEM""CLS")"MEM,                   FN_PTR(MHN_resolve_Mem)},
-  {CC"getConstant",               CC"(I)I",                              FN_PTR(MHN_getConstant)},
+  {CC "init",                      CC "(" MEM "" OBJ ")V",                     FN_PTR(MHN_init_Mem)},
+  {CC"expand",                     CC "(" MEM ")V",                          FN_PTR(MHN_expand_Mem)},
+  {CC "resolve",                   CC "(" MEM "" CLS ")" MEM,                   FN_PTR(MHN_resolve_Mem)},
+  {CC "getConstant",               CC "(I)I",                              FN_PTR(MHN_getConstant)},
   //  static native int getNamedCon(int which, Object[] name)
-  {CC"getNamedCon",               CC"(I["OBJ")I",                        FN_PTR(MHN_getNamedCon)},
+  {CC "getNamedCon",               CC "(I[" OBJ ")I",                        FN_PTR(MHN_getNamedCon)},
   //  static native int getMembers(Class<?> defc, String matchName, String matchSig,
   //          int matchFlags, Class<?> caller, int skip, MemberName[] results);
-  {CC"getMembers",                CC"("CLS""STRG""STRG"I"CLS"I["MEM")I", FN_PTR(MHN_getMembers)},
-  {CC"objectFieldOffset",         CC"("MEM")J",                          FN_PTR(MHN_objectFieldOffset)},
-  {CC"setCallSiteTargetNormal",   CC"("CS""MH")V",                       FN_PTR(MHN_setCallSiteTargetNormal)},
-  {CC"setCallSiteTargetVolatile", CC"("CS""MH")V",                       FN_PTR(MHN_setCallSiteTargetVolatile)},
-  {CC"staticFieldOffset",         CC"("MEM")J",                          FN_PTR(MHN_staticFieldOffset)},
-  {CC"staticFieldBase",           CC"("MEM")"OBJ,                        FN_PTR(MHN_staticFieldBase)},
-  {CC"getMemberVMInfo",           CC"("MEM")"OBJ,                        FN_PTR(MHN_getMemberVMInfo)}
+  {CC "getMembers",                CC "(" CLS "" STRG "" STRG "I" CLS "I[" MEM ")I", FN_PTR(MHN_getMembers)},
+  {CC "objectFieldOffset",         CC "(" MEM ")J",                          FN_PTR(MHN_objectFieldOffset)},
+  {CC "setCallSiteTargetNormal",   CC "(" CS "" MH ")V",                       FN_PTR(MHN_setCallSiteTargetNormal)},
+  {CC "setCallSiteTargetVolatile", CC "(" CS "" MH ")V",                       FN_PTR(MHN_setCallSiteTargetVolatile)},
+  {CC "staticFieldOffset",         CC "(" MEM ")J",                          FN_PTR(MHN_staticFieldOffset)},
+  {CC "staticFieldBase",           CC "(" MEM ")" OBJ,                        FN_PTR(MHN_staticFieldBase)},
+  {CC "getMemberVMInfo",           CC "(" MEM ")" OBJ,                        FN_PTR(MHN_getMemberVMInfo)}
 };
 
 static JNINativeMethod MH_methods[] = {
   // UnsupportedOperationException throwers
-  {CC"invoke",                    CC"(["OBJ")"OBJ,                       FN_PTR(MH_invoke_UOE)},
-  {CC"invokeExact",               CC"(["OBJ")"OBJ,                       FN_PTR(MH_invokeExact_UOE)}
+  {CC "invoke",                    CC "([" OBJ ")" OBJ,                       FN_PTR(MH_invoke_UOE)},
+  {CC "invokeExact",               CC "([" OBJ ")" OBJ,                       FN_PTR(MH_invokeExact_UOE)}
 };
 
 /**

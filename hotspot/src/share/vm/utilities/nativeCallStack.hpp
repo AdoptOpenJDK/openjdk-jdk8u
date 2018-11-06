@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -51,18 +51,23 @@
  * 2. The class is strict stack object, no heap or virtual memory can be allocated
  *    from it.
  */
+class MemTracker;
+
 class NativeCallStack : public StackObj {
- public:
-  static const NativeCallStack EMPTY_STACK;
+  friend class MemTracker;
 
- private:
-  address   _stack[NMT_TrackingStackDepth];
-  int       _hash_value;
+private:
+  address       _stack[NMT_TrackingStackDepth];
+  unsigned int  _hash_value;
 
- public:
+  static NativeCallStack EMPTY_STACK;
+public:
   NativeCallStack(int toSkip = 0, bool fillStack = false);
   NativeCallStack(address* pc, int frameCount);
 
+  static inline const NativeCallStack& empty_stack() {
+    return EMPTY_STACK;
+  }
 
   // if it is an empty stack
   inline bool is_empty() const {
@@ -89,7 +94,7 @@ class NativeCallStack : public StackObj {
   }
 
   // Hash code. Any better algorithm?
-  int hash() const;
+  unsigned int hash() const;
 
   void print_on(outputStream* out) const;
   void print_on(outputStream* out, int indent) const;

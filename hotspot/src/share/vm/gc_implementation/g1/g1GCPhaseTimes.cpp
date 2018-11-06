@@ -41,13 +41,13 @@ private:
   int _cur;
 
   void vappend(const char* format, va_list ap)  ATTRIBUTE_PRINTF(2, 0) {
-    int res = vsnprintf(&_buffer[_cur], BUFFER_LEN - _cur, format, ap);
-    if (res != -1) {
-      _cur += res;
-    } else {
+    int res = os::vsnprintf(&_buffer[_cur], BUFFER_LEN - _cur, format, ap);
+    if (res > BUFFER_LEN) {
       DEBUG_ONLY(warning("buffer too small in LineBuffer");)
       _buffer[BUFFER_LEN -1] = 0;
       _cur = BUFFER_LEN; // vsnprintf above should not add to _buffer if we are called again
+    } else if (res != -1) {
+      _cur += res;
     }
   }
 
@@ -332,7 +332,7 @@ void G1GCPhaseTimes::print_stats(int level, const char* str, double value) {
 }
 
 void G1GCPhaseTimes::print_stats(int level, const char* str, size_t value) {
-  LineBuffer(level).append_and_print_cr("[%s: "SIZE_FORMAT"]", str, value);
+  LineBuffer(level).append_and_print_cr("[%s: " SIZE_FORMAT "]", str, value);
 }
 
 void G1GCPhaseTimes::print_stats(int level, const char* str, double value, uint workers) {
@@ -452,7 +452,7 @@ class G1GCParPhasePrinter : public StackObj {
 
     if (phase->_thread_work_items != NULL) {
       LineBuffer buf2(phase->_thread_work_items->_indent_level);
-      buf2.append_and_print_cr("[%s:  "SIZE_FORMAT"]", phase->_thread_work_items->_title, _phase_times->sum_thread_work_items(phase_id));
+      buf2.append_and_print_cr("[%s:  " SIZE_FORMAT "]", phase->_thread_work_items->_title, _phase_times->sum_thread_work_items(phase_id));
     }
   }
 

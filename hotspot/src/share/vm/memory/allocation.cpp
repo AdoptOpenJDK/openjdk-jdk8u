@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -66,8 +66,7 @@ void* MetaspaceObj::operator new(size_t size, ClassLoaderData* loader_data,
                                  size_t word_size, bool read_only,
                                  MetaspaceObj::Type type, TRAPS) throw() {
   // Klass has it's own operator new
-  return Metaspace::allocate(loader_data, word_size, read_only,
-                             type, CHECK_NULL);
+  return Metaspace::allocate(loader_data, word_size, read_only, type, THREAD);
 }
 
 bool MetaspaceObj::is_shared() const {
@@ -749,7 +748,7 @@ julong  AllocStats::free_bytes()  { return os::free_bytes - start_mfree_bytes; }
 julong  AllocStats::resource_bytes() { return Arena::_bytes_allocated - start_res_bytes; }
 void    AllocStats::print() {
   tty->print_cr(UINT64_FORMAT " mallocs (" UINT64_FORMAT "MB), "
-                UINT64_FORMAT" frees (" UINT64_FORMAT "MB), " UINT64_FORMAT "MB resrc",
+                UINT64_FORMAT " frees (" UINT64_FORMAT "MB), " UINT64_FORMAT "MB resrc",
                 num_mallocs(), alloc_bytes()/M, num_frees(), free_bytes()/M, resource_bytes()/M);
 }
 

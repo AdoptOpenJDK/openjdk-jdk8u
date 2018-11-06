@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -488,7 +488,7 @@ void ClassLoaderData::free_deallocate_list() {
 // These anonymous class loaders are to contain classes used for JSR292
 ClassLoaderData* ClassLoaderData::anonymous_class_loader_data(oop loader, TRAPS) {
   // Add a new class loader data to the graph.
-  return ClassLoaderDataGraph::add(loader, true, CHECK_NULL);
+  return ClassLoaderDataGraph::add(loader, true, THREAD);
 }
 
 const char* ClassLoaderData::loader_name() {
@@ -502,7 +502,7 @@ const char* ClassLoaderData::loader_name() {
 
 void ClassLoaderData::dump(outputStream * const out) {
   ResourceMark rm;
-  out->print("ClassLoaderData CLD: "PTR_FORMAT", loader: "PTR_FORMAT", loader_klass: "PTR_FORMAT" %s {",
+  out->print("ClassLoaderData CLD: " PTR_FORMAT ", loader: " PTR_FORMAT ", loader_klass: " PTR_FORMAT " %s {",
       p2i(this), p2i((void *)class_loader()),
       p2i(class_loader() != NULL ? class_loader()->klass() : NULL), loader_name());
   if (claimed()) out->print(" claimed ");
@@ -520,7 +520,7 @@ void ClassLoaderData::dump(outputStream * const out) {
     ResourceMark rm;
     Klass* k = _klasses;
     while (k != NULL) {
-      out->print_cr("klass "PTR_FORMAT", %s, CT: %d, MUT: %d", k, k->name()->as_C_string(),
+      out->print_cr("klass " PTR_FORMAT ", %s, CT: %d, MUT: %d", k, k->name()->as_C_string(),
           k->has_modified_oops(), k->has_accumulated_modified_oops());
       assert(k != k->next_link(), "no loops!");
       k = k->next_link();

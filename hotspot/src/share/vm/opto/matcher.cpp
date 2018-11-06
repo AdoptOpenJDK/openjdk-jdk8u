@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -95,6 +95,7 @@ Matcher::Matcher()
   idealreg2spillmask  [Op_VecD] = NULL;
   idealreg2spillmask  [Op_VecX] = NULL;
   idealreg2spillmask  [Op_VecY] = NULL;
+  idealreg2spillmask  [Op_RegFlags] = NULL;
 
   idealreg2debugmask  [Op_RegI] = NULL;
   idealreg2debugmask  [Op_RegN] = NULL;
@@ -106,6 +107,7 @@ Matcher::Matcher()
   idealreg2debugmask  [Op_VecD] = NULL;
   idealreg2debugmask  [Op_VecX] = NULL;
   idealreg2debugmask  [Op_VecY] = NULL;
+  idealreg2debugmask  [Op_RegFlags] = NULL;
 
   idealreg2mhdebugmask[Op_RegI] = NULL;
   idealreg2mhdebugmask[Op_RegN] = NULL;
@@ -117,6 +119,7 @@ Matcher::Matcher()
   idealreg2mhdebugmask[Op_VecD] = NULL;
   idealreg2mhdebugmask[Op_VecX] = NULL;
   idealreg2mhdebugmask[Op_VecY] = NULL;
+  idealreg2mhdebugmask[Op_RegFlags] = NULL;
 
   debug_only(_mem_node = NULL;)   // Ideal memory node consumed by mach node
 }
@@ -193,7 +196,7 @@ void Matcher::match( ) {
   const TypeTuple *range = C->tf()->range();
   if( range->cnt() > TypeFunc::Parms ) { // If not a void function
     // Get ideal-register return type
-    int ireg = range->field_at(TypeFunc::Parms)->ideal_reg();
+    uint ireg = range->field_at(TypeFunc::Parms)->ideal_reg();
     // Get machine return register
     uint sop = C->start()->Opcode();
     OptoRegPair regs = return_value(ireg, false);

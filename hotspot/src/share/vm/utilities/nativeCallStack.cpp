@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,7 +27,7 @@
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/nativeCallStack.hpp"
 
-const NativeCallStack NativeCallStack::EMPTY_STACK(0, false);
+NativeCallStack NativeCallStack::EMPTY_STACK(0, false);
 
 NativeCallStack::NativeCallStack(int toSkip, bool fillStack) :
   _hash_value(0) {
@@ -55,6 +55,7 @@ NativeCallStack::NativeCallStack(address* pc, int frameCount) {
   for (; index < NMT_TrackingStackDepth; index ++) {
     _stack[index] = NULL;
   }
+  _hash_value = 0;
 }
 
 // number of stack frames captured
@@ -69,19 +70,16 @@ int NativeCallStack::frames() const {
 }
 
 // Hash code. Any better algorithm?
-int NativeCallStack::hash() const {
-  long hash_val = _hash_value;
+unsigned int NativeCallStack::hash() const {
+  uintptr_t hash_val = _hash_value;
   if (hash_val == 0) {
-    long pc;
-    int  index;
-    for (index = 0; index < NMT_TrackingStackDepth; index ++) {
-      pc = (long)_stack[index];
-      if (pc == 0) break;
-      hash_val += pc;
+    for (int index = 0; index < NMT_TrackingStackDepth; index++) {
+      if (_stack[index] == NULL) break;
+      hash_val += (uintptr_t)_stack[index];
     }
 
     NativeCallStack* p = const_cast<NativeCallStack*>(this);
-    p->_hash_value = (int)(hash_val & 0xFFFFFFFF);
+    p->_hash_value = (unsigned int)(hash_val & 0xFFFFFFFF);
   }
   return _hash_value;
 }
@@ -116,4 +114,3 @@ void NativeCallStack::print_on(outputStream* out, int indent) const {
     }
   }
 }
-

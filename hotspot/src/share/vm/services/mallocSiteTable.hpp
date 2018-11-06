@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,7 +42,7 @@ class MallocSite : public AllocationSite<MemoryCounter> {
 
  public:
   MallocSite() :
-    AllocationSite<MemoryCounter>(NativeCallStack::EMPTY_STACK), _flags(mtNone) {}
+    AllocationSite<MemoryCounter>(NativeCallStack::empty_stack()), _flags(mtNone) {}
 
   MallocSite(const NativeCallStack& stack, MEMFLAGS flags) :
     AllocationSite<MemoryCounter>(stack), _flags(flags) {}
@@ -245,8 +245,7 @@ class MallocSiteTable : AllStatic {
   static MallocSite* malloc_site(size_t bucket_idx, size_t pos_idx);
   static bool walk(MallocSiteWalker* walker);
 
-  static inline int hash_to_index(int  hash) {
-    hash = (hash > 0) ? hash : (-hash);
+  static inline unsigned int hash_to_index(unsigned int hash) {
     return (hash % table_size);
   }
 
