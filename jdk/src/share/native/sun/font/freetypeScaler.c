@@ -334,6 +334,11 @@ static double euclidianDistance(double a, double b) {
     return sqrt(a*a+b*b);
 }
 
+static jboolean requestRotatedGlyph(FTScalerContext* context) {
+    return (context->transform.xy != 0 || context->transform.yx != 0);
+}
+
+
 JNIEXPORT jlong JNICALL
 Java_sun_font_FreetypeFontScaler_createScalerContextNative(
         JNIEnv *env, jobject scaler, jlong pScaler, jdoubleArray matrix,
@@ -672,6 +677,7 @@ Java_sun_font_FreetypeFontScaler_getGlyphImageNative(
     GlyphInfo *glyphInfo;
     int glyph_index;
     int renderFlags = FT_LOAD_RENDER, target;
+    jboolean loaded = JNI_FALSE;
     FT_GlyphSlot ftglyph;
 
     FTScalerContext* context =
@@ -714,7 +720,19 @@ Java_sun_font_FreetypeFontScaler_getGlyphImageNative(
 
     glyph_index = FT_Get_Char_Index(scalerInfo->face, glyphCode);
 
-    error = FT_Load_Glyph(scalerInfo->face, glyphCode, renderFlags);
+    // Try not to load BITMAP font if rotated glyph is requested 
+    if (requestRotatedGlyph(context)) {
+        error = FT_Load_Glyph(scalerInfo->face, glyphCode, renderFlags | FT_LOAD_NO_BITMAP);
+        if (!error) {
+            loaded = JNI_TRUE;
+        }
+    }
+
+    if (loaded == JNI_FALSE) {
+        // Fall back for compatibility 
+        error = FT_Load_Glyph(scalerInfo->face, glyphCode, renderFlags);
+    }
+
     if (error) {
         //do not destroy scaler yet.
         //this can be problem of particular context (e.g. with bad transform)
