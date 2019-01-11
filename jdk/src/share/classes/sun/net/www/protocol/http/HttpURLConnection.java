@@ -1836,7 +1836,10 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
                 }
 
                 try {
-                    cl = Long.parseLong(responses.findValue("content-length"));
+                	String contentLength = responses.findValue("content-length");
+                	if (contentLength != null) {
+                		cl = Long.parseLong(contentLength);
+                	}
                 } catch (Exception exc) { };
 
                 if (method.equals("HEAD") || cl == 0 ||
