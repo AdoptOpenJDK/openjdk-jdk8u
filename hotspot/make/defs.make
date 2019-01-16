@@ -323,7 +323,7 @@ ifneq ($(OSNAME),windows)
   else
     LIBARCH      ?= $(LIBARCH/$(BUILDARCH))
   endif
-
+  LIBARCH        ?= $(LIBARCH/$(BUILDARCH))
   LIBARCH/i486    = i386
   LIBARCH/amd64   = amd64
   LIBARCH/sparc   = sparc

@@ -121,7 +121,7 @@ void SystemDictionary::compute_java_system_loader(TRAPS) {
 
 ClassLoaderData* SystemDictionary::register_loader(Handle class_loader, TRAPS) {
   if (class_loader() == NULL) return ClassLoaderData::the_null_class_loader_data();
-  return ClassLoaderDataGraph::find_or_create(class_loader, CHECK_NULL);
+  return ClassLoaderDataGraph::find_or_create(class_loader, THREAD);
 }
 
 // ----------------------------------------------------------------------------
@@ -816,7 +816,16 @@ Klass* SystemDictionary::resolve_instance_class_or_null(Symbol* name,
         check_constraints(d_index, d_hash, k, class_loader, false, THREAD);
 
         // Need to check for a PENDING_EXCEPTION again; check_constraints
-        // can throw and doesn't use the CHECK macro.
+        // can throw but we may have to remove entry from the placeholder table below.
+        if (!HAS_PENDING_EXCEPTION) {
+          // Record dependency for non-parent delegation.
+          // This recording keeps the defining class loader of the klass (k) found
+          // from being unloaded while the initiating class loader is loaded
+          // even if the reference to the defining class loader is dropped
+          // before references to the initiating class loader.
+          loader_data->record_dependency(k(), THREAD);
+        }
+
         if (!HAS_PENDING_EXCEPTION) {
           { // Grabbing the Compile_lock prevents systemDictionary updates
             // during compilations.
