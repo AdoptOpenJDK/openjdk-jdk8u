@@ -261,7 +261,7 @@ public class FileChannelImpl
                     return 0;
                 do {
                     // in append-mode then position is advanced to end before writing
-                    p = (append) ? nd.size(fd) : position0(fd, -1);
+                    p = (append) ? nd.size(fd) : nd.seek(fd, -1);
                 } while ((p == IOStatus.INTERRUPTED) && isOpen());
                 return IOStatus.normalize(p);
             } finally {
@@ -285,7 +285,7 @@ public class FileChannelImpl
                 if (!isOpen())
                     return null;
                 do {
-                    p  = position0(fd, newPosition);
+                    p  = nd.seek(fd, newPosition);
                 } while ((p == IOStatus.INTERRUPTED) && isOpen());
                 return this;
             } finally {
@@ -345,7 +345,7 @@ public class FileChannelImpl
 
                 // get current position
                 do {
-                    p = position0(fd, -1);
+                    p = nd.seek(fd, -1);
                 } while ((p == IOStatus.INTERRUPTED) && isOpen());
                 if (!isOpen())
                     return null;
@@ -364,7 +364,7 @@ public class FileChannelImpl
                 if (p > newSize)
                     p = newSize;
                 do {
-                    rp = position0(fd, p);
+                    rp = nd.seek(fd, p);
                 } while ((rp == IOStatus.INTERRUPTED) && isOpen());
                 return this;
             } finally {
@@ -551,11 +551,10 @@ public class FileChannelImpl
     {
         // Untrusted target: Use a newly-erased buffer
         int c = Math.min(icount, TRANSFER_SIZE);
-        ByteBuffer bb = Util.getTemporaryDirectBuffer(c);
+        ByteBuffer bb = ByteBuffer.allocate(c);
         long tw = 0;                    // Total bytes written
         long pos = position;
         try {
-            Util.erase(bb);
             while (tw < icount) {
                 bb.limit(Math.min((int)(icount - tw), TRANSFER_SIZE));
                 int nr = read(bb, pos);
@@ -576,8 +575,6 @@ public class FileChannelImpl
             if (tw > 0)
                 return tw;
             throw x;
-        } finally {
-            Util.releaseTemporaryDirectBuffer(bb);
         }
     }
 
@@ -661,11 +658,10 @@ public class FileChannelImpl
     {
         // Untrusted target: Use a newly-erased buffer
         int c = (int)Math.min(count, TRANSFER_SIZE);
-        ByteBuffer bb = Util.getTemporaryDirectBuffer(c);
+        ByteBuffer bb = ByteBuffer.allocate(c);
         long tw = 0;                    // Total bytes written
         long pos = position;
         try {
-            Util.erase(bb);
             while (tw < count) {
                 bb.limit((int)Math.min((count - tw), (long)TRANSFER_SIZE));
                 // ## Bug: Will block reading src if this channel
@@ -686,8 +682,6 @@ public class FileChannelImpl
             if (tw > 0)
                 return tw;
             throw x;
-        } finally {
-            Util.releaseTemporaryDirectBuffer(bb);
         }
     }
 
@@ -906,7 +900,7 @@ public class FileChannelImpl
                     }
                     int rv;
                     do {
-                        rv = nd.allocate(fd, position + size);
+                        rv = nd.truncate(fd, position + size);
                     } while ((rv == IOStatus.INTERRUPTED) && isOpen());
                     if (!isOpen())
                         return null;
@@ -1216,11 +1210,6 @@ public class FileChannelImpl
     // Transfers from src to dst, or returns -2 if kernel can't do that
     private native long transferTo0(FileDescriptor src, long position,
                                     long count, FileDescriptor dst);
-
-    // Sets or reports this file's position
-    // If offset is -1, the current position is returned
-    // otherwise the position is set to offset
-    private native long position0(FileDescriptor fd, long offset);
 
     // Caches fieldIDs
     private static native long initIDs();

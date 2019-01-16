@@ -96,7 +96,9 @@ void setDefaultScopeID(JNIEnv *env, struct sockaddr *him)
     }
     int defaultIndex;
     struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)him;
-    if (sin6->sin6_family == AF_INET6 && (sin6->sin6_scope_id == 0)) {
+    if (sin6->sin6_family == AF_INET6 && (sin6->sin6_scope_id == 0) &&
+            (IN6_IS_ADDR_LINKLOCAL(&sin6->sin6_addr) ||
+             IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr))) {
         defaultIndex = (*env)->GetStaticIntField(env, ni_class,
                                                  ni_defaultIndexID);
         sin6->sin6_scope_id = defaultIndex;
@@ -606,6 +608,8 @@ static void initLoopbackRoutes() {
 
                 if (loRoutesTemp == 0) {
                     free(loRoutes);
+                    loRoutes = NULL;
+                    nRoutes = 0;
                     fclose (f);
                     return;
                 }
