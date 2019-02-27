@@ -27,6 +27,7 @@ package java.net;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
@@ -170,15 +171,38 @@ import java.util.Set;
             Object httpClient = httpField.get(conn);
             return (Socket) serverSocketField.get(httpClient);
         } catch (IllegalAccessException x) {
-            throw new InternalError("Should not reach here", x);
+            throw new IOException("Access is not granted:", x);
         }
     }
 
-    private void doTunneling(HttpURLConnection conn) {
+    /**
+     * Call underlying implementation with reflection.
+     * 
+     * @param conn
+     *            HTTP connection.
+     * @throws IOException
+     *             if underlying implementation throws an exception or error.
+     * @throws RuntimeException
+     *             if underlying implementation throws an unchecked exception.
+     */
+    private void doTunneling(HttpURLConnection conn)
+            throws IOException
+    {
         try {
-            doTunneling.invoke(conn);
+           doTunneling.invoke(conn);
+        } catch (InvocationTargetException exception) {
+            // in case of PROXY throws an exception, this is packed in the InvocationTargetException.
+            Throwable targetException = exception.getTargetException();
+            if (targetException instanceof IOException) {
+                throw (IOException)targetException;
+            } else if (targetException instanceof RuntimeException) {
+                throw (RuntimeException)targetException;
+            } else {
+                throw new IOException("Underlying implementation throws an unexpected exception/error:", exception);
+            }
+
         } catch (ReflectiveOperationException x) {
-            throw new InternalError("Should not reach here", x);
+            throw new IOException("Underlying implementation throws an unexpected exception/error:", x);
         }
     }
 
