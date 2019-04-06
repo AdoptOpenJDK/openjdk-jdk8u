@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,36 +20,30 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
+package java.util.stream;
 
-/*
- * @test
- * @bug 6843127
- * @run main/othervm/timeout=300 -Dsun.net.spi.nameservice.provider.1=ns,mock BadKdc2
- * @summary krb5 should not try to access unavailable kdc too often
- */
+import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertTrue;
 
-import java.io.*;
-import java.security.Security;
+public final class ThowableHelper {
 
-public class BadKdc2 {
+    public static void checkException(Class<? extends Exception> ce, Runnable r) {
+        Exception caught = null;
+        try {
+            r.run();
+        } catch (Exception e) {
+            caught = e;
+        }
 
-    public static void main(String[] args)
-            throws Exception {
+        assertNotNull(caught);
+        assertTrue(ce.isInstance(caught));
+    }
 
-        // 1 sec is too short.
-        BadKdc.setRatio(3.0f);
+    public static void checkNPE(Runnable r) {
+        checkException(NullPointerException.class, r);
+    }
 
-        Security.setProperty(
-                "krb5.kdc.bad.policy", "tryLess:2," + BadKdc.toReal(1000));
-        BadKdc.go(
-                "121212222222(32){1,2}11112121(32){1,2}", // 1 2
-                "11112121(32){1,2}11112121(32){1,2}", // 1 2
-                // refresh
-                "121212222222(32){1,2}11112121(32){1,2}", // 1 2
-                // k3 off k2 on
-                "1111(21){1,2}1111(22){1,2}", // 1
-                // k1 on
-                "(11){1,2}(12){1,2}"  // empty
-        );
+    public static void checkISE(Runnable r) {
+        checkException(IllegalStateException.class, r);
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1994, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1994, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -112,6 +112,16 @@ Java_java_lang_System_identityHashCode(JNIEnv *env, jobject this, jobject x)
 #define VENDOR "AdoptOpenJdk"
 #define VENDOR_URL "https://adoptopenjdk.net/"
 #define VENDOR_URL_BUG "https://github.com/AdoptOpenJDK/openjdk-build/issues"
+#endif
+/* Third party may overwrite these values. */
+#ifndef VENDOR
+#define VENDOR "Oracle Corporation"
+#endif
+#ifndef VENDOR_URL
+#define VENDOR_URL "http://java.oracle.com/"
+#endif
+#ifndef VENDOR_URL_BUG
+#define VENDOR_URL_BUG "http://bugreport.sun.com/bugreport/"
 #endif
 
 #define JAVA_MAX_SUPPORTED_VERSION 52
