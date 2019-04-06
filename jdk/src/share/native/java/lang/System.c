@@ -112,6 +112,7 @@ Java_java_lang_System_identityHashCode(JNIEnv *env, jobject this, jobject x)
 #define VENDOR "AdoptOpenJdk"
 #define VENDOR_URL "https://adoptopenjdk.net/"
 #define VENDOR_URL_BUG "https://github.com/AdoptOpenJDK/openjdk-build/issues"
+#endif
 
 /* Third party may overwrite these values. */
 #ifndef VENDOR
