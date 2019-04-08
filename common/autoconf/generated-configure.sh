@@ -825,12 +825,9 @@ COOKED_BUILD_NUMBER
 COOKED_JDK_UPDATE_VERSION
 JDK_VERSION
 COPYRIGHT_YEAR
-<<<<<<< HEAD
-=======
 VENDOR_URL_VM_BUG
 VENDOR_URL_BUG
 VENDOR_URL
->>>>>>> 51cd8c74bd864879b6351a54c0d01a9c9d99db34
 COMPANY_NAME
 MACOSX_BUNDLE_ID_BASE
 MACOSX_BUNDLE_NAME_BASE
@@ -1064,14 +1061,11 @@ with_milestone
 with_update_version
 with_user_release_suffix
 with_build_number
-<<<<<<< HEAD
 with_company_name
-=======
 with_vendor_name
 with_vendor_url
 with_vendor_bug_url
 with_vendor_vm_bug_url
->>>>>>> 51cd8c74bd864879b6351a54c0d01a9c9d99db34
 with_copyright_year
 with_boot_jdk
 with_boot_jdk_jvmargs
@@ -1916,9 +1910,7 @@ Optional Packages:
                           Add a custom string to the version string if build
                           number isn't set.[username_builddateb00]
   --with-build-number     Set build number value for build [b00]
-<<<<<<< HEAD
   --with-company-name     Set company name.
-=======
   --with-vendor-name      Set vendor name. Among others, used to set the
                           'java.vendor' and 'java.vm.vendor' system
                           properties. [not specified]
@@ -1929,7 +1921,6 @@ Optional Packages:
   --with-vendor-vm-bug-url
                           Sets the bug URL which will be displayed when the VM
                           crashes [not specified]
->>>>>>> 51cd8c74bd864879b6351a54c0d01a9c9d99db34
   --with-copyright-year   Set copyright year value for build [current year]
   --with-boot-jdk         path to Boot JDK (used to bootstrap build) [probed]
   --with-boot-jdk-jvmargs specify JVM arguments to be passed to all
@@ -3931,7 +3922,7 @@ pkgadd_help() {
 
 
 #
-# Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -4398,11 +4389,7 @@ VS_SDK_PLATFORM_NAME_2017=
 #CUSTOM_AUTOCONF_INCLUDE
 
 # Do not change or remove the following line, it is needed for consistency checks:
-<<<<<<< HEAD
-DATE_WHEN_GENERATED=1547638170
-=======
-DATE_WHEN_GENERATED=1553405262
->>>>>>> 51cd8c74bd864879b6351a54c0d01a9c9d99db34
+DATE_WHEN_GENERATED=1554716472
 
 ###############################################################################
 #
@@ -19915,7 +19902,6 @@ fi
 
 
 
-<<<<<<< HEAD
   # The company name, if any
 
 # Check whether --with-company-name was given.
@@ -19929,7 +19915,9 @@ fi
     as_fn_error $? "--with-company-name contains non-printing characters: $with_company_name" "$LINENO" 5
   elif test "x$with_company_name" != x; then
     COMPANY_NAME="$with_company_name"
-=======
+  fi
+
+
   # The vendor name, if any
 
 # Check whether --with-vendor-name was given.
@@ -19993,7 +19981,6 @@ fi
     as_fn_error $? "--with-vendor-vm-bug-url contains non-printing characters: $with_vendor_vm_bug_url" "$LINENO" 5
   else
     VENDOR_URL_VM_BUG="$with_vendor_vm_bug_url"
->>>>>>> 51cd8c74bd864879b6351a54c0d01a9c9d99db34
   fi
 
 
