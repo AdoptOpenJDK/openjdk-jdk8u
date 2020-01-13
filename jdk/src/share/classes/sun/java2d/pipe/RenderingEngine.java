@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,8 +30,8 @@ import java.awt.BasicStroke;
 import java.awt.geom.PathIterator;
 import java.awt.geom.AffineTransform;
 
-import java.security.PrivilegedAction;
 import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.ServiceLoader;
 import sun.security.action.GetPropertyAction;
 
@@ -121,9 +121,10 @@ public abstract class RenderingEngine {
             AccessController.doPrivileged(new PrivilegedAction<RenderingEngine>() {
                 public RenderingEngine run() {
                     final String ductusREClass = "sun.dc.DuctusRenderingEngine";
-                    String reClass =
-                        System.getProperty("sun.java2d.renderer", ductusREClass);
-                    if (reClass.equals(ductusREClass)) {
+                    final String marlinREClass = "sun.java2d.marlin.DMarlinRenderingEngine";
+
+                    String reClass = System.getProperty("sun.java2d.renderer");
+                    if (reClass == null || reClass.equals(ductusREClass)) {
                         try {
                             Class<?> cls = Class.forName(ductusREClass);
                             return (RenderingEngine) cls.newInstance();
@@ -133,17 +134,27 @@ public abstract class RenderingEngine {
                     }
 
                     ServiceLoader<RenderingEngine> reLoader =
-                        ServiceLoader.loadInstalled(RenderingEngine.class);
+                            ServiceLoader.loadInstalled(RenderingEngine.class);
 
                     RenderingEngine service = null;
+                    RenderingEngine marlinService = null;
 
                     for (RenderingEngine re : reLoader) {
                         service = re;
-                        if (re.getClass().getName().equals(reClass)) {
-                            break;
+                        String serviceName = re.getClass().getName();
+                        if (serviceName.equals(reClass)) {
+                            return service;
+                        }
+                        if (serviceName.equals(marlinREClass)) {
+                            marlinService = service;
                         }
                     }
-                    return service;
+                    // use Marlin as default renderer
+                    if (marlinService != null) {
+                        return marlinService;
+                    } else {
+                        return service;
+                    }
                 }
             });
 
