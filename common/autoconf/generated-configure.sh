@@ -4393,7 +4393,7 @@ VS_SDK_PLATFORM_NAME_2017=
 #CUSTOM_AUTOCONF_INCLUDE
 
 # Do not change or remove the following line, it is needed for consistency checks:
-DATE_WHEN_GENERATED=1580252799
+DATE_WHEN_GENERATED=1581116781
 
 ###############################################################################
 #
@@ -19782,8 +19782,6 @@ fi
 
   if test "x$with_cacerts_file" != x; then
     CACERTS_FILE=$with_cacerts_file
-  else
-    CACERTS_FILE=${SRC_ROOT}/jdk/src/share/lib/security/cacerts
   fi
 
 
