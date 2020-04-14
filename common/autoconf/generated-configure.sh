@@ -4393,7 +4393,7 @@ VS_SDK_PLATFORM_NAME_2017=
 #CUSTOM_AUTOCONF_INCLUDE
 
 # Do not change or remove the following line, it is needed for consistency checks:
-DATE_WHEN_GENERATED=1581116781
+DATE_WHEN_GENERATED=1586901989
 
 ###############################################################################
 #
@@ -41266,6 +41266,7 @@ $as_echo "$ac_cv_c_bigendian" >&6; }
 
   if test "x$TOOLCHAIN_TYPE" = xgcc; then
     PICFLAG="-fPIC"
+    PIEFLAG="-fPIE"
     C_FLAG_REORDER=''
     CXX_FLAG_REORDER=''
 
@@ -41286,6 +41287,7 @@ $as_echo "$ac_cv_c_bigendian" >&6; }
     fi
   elif test "x$TOOLCHAIN_TYPE" = xsolstudio; then
     PICFLAG="-KPIC"
+    PIEFLAG=""
     C_FLAG_REORDER='-xF'
     CXX_FLAG_REORDER='-xF'
     SHARED_LIBRARY_FLAGS="-G"
@@ -41295,6 +41297,7 @@ $as_echo "$ac_cv_c_bigendian" >&6; }
     SET_SHARED_LIBRARY_MAPFILE='-M$1'
   elif test "x$TOOLCHAIN_TYPE" = xxlc; then
     PICFLAG="-qpic=large"
+    PIEFLAG=""
     C_FLAG_REORDER=''
     CXX_FLAG_REORDER=''
     SHARED_LIBRARY_FLAGS="-qmkshrobj"
@@ -41304,6 +41307,7 @@ $as_echo "$ac_cv_c_bigendian" >&6; }
     SET_SHARED_LIBRARY_MAPFILE=''
   elif test "x$TOOLCHAIN_TYPE" = xmicrosoft; then
     PICFLAG=""
+    PIEFLAG=""
     C_FLAG_REORDER=''
     CXX_FLAG_REORDER=''
     SHARED_LIBRARY_FLAGS="-LD"
@@ -42118,8 +42122,8 @@ $as_echo "$supports" >&6; }
   CXXFLAGS_JDKLIB="$CCXXFLAGS_JDK $CXXFLAGS_JDK $PICFLAG $CXXFLAGS_JDKLIB_EXTRA "
 
   # Executable flags
-  CFLAGS_JDKEXE="$CCXXFLAGS_JDK $CFLAGS_JDK"
-  CXXFLAGS_JDKEXE="$CCXXFLAGS_JDK $CXXFLAGS_JDK"
+  CFLAGS_JDKEXE="$CCXXFLAGS_JDK $CFLAGS_JDK $PIEFLAG"
+  CXXFLAGS_JDKEXE="$CCXXFLAGS_JDK $CXXFLAGS_JDK $PIEFLAG"
 
 
 
@@ -42201,6 +42205,13 @@ $as_echo "$supports" >&6; }
     LDFLAGS_JDKEXE="${LDFLAGS_JDK}"
     if test "x$OPENJDK_TARGET_OS" = xlinux; then
       LDFLAGS_JDKEXE="$LDFLAGS_JDKEXE -Xlinker --allow-shlib-undefined"
+    fi
+    if test "x$TOOLCHAIN_TYPE" = xgcc; then
+      # Enabling pie on 32 bit builds prevents the JVM from allocating a continuous
+      # java heap.
+      if test "x$OPENJDK_TARGET_CPU_BITS" != "x32"; then
+        LDFLAGS_JDKEXE="$LDFLAGS_JDKEXE -pie"
+      fi
     fi
   fi
 
