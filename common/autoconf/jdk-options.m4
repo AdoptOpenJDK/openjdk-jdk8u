@@ -542,6 +542,18 @@ AC_DEFUN_ONCE([JDKOPT_SETUP_JDK_VERSION_NUMBERS],
   AC_SUBST(MACOSX_BUNDLE_NAME_BASE)
   AC_SUBST(MACOSX_BUNDLE_ID_BASE)
 
+  # The company name, if any
+  AC_ARG_WITH(company-name, [AS_HELP_STRING([--with-company-name],
+      [Set company name.])])
+  if test "x$with_company_name" = xyes; then
+    AC_MSG_ERROR([--with-company-name must have a value])
+  elif [ ! [[ $with_company_name =~ ^[[:print:]]*$ ]] ]; then
+    AC_MSG_ERROR([--with-company-name contains non-printing characters: $with_company_name])
+  elif test "x$with_company_name" != x; then
+    COMPANY_NAME="$with_company_name"
+  fi
+  AC_SUBST(COMPANY_NAME)
+
   # The vendor name, if any
   AC_ARG_WITH(vendor-name, [AS_HELP_STRING([--with-vendor-name],
       [Set vendor name. Among others, used to set the 'java.vendor'
