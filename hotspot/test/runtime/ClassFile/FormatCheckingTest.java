@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,24 +19,25 @@
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
- *
  */
 
-#ifndef SHARE_VM_JFR_RECORDER_INTERNAL_JFREMERGENCY_HPP
-#define SHARE_VM_JFR_RECORDER_INTERNAL_JFREMERGENCY_HPP
+/*
+ * @test
+ * @bug 8148854
+ * @summary Ensure class name loaded by app class loader is format checked by default
+ * @library /testlibrary
+ * @compile BadHelloWorld.jcod
+ * @run main FormatCheckingTest
+ */
 
-#include "memory/allocation.hpp"
+import com.oracle.java.testlibrary.OutputAnalyzer;
+import com.oracle.java.testlibrary.ProcessTools;
 
-//
-// Responsible for creating an hs_err<pid>.jfr file in exceptional shutdown situations (crash, OOM)
-//
-class JfrEmergencyDump : AllStatic {
- public:
-  static void on_vm_shutdown(bool exception_handler);
-  static void on_vm_error(const char* repository_path);
-  static const char* build_dump_path(const char* repository_path);
-};
-
-#endif // SHARE_VM_JFR_RECORDER_INTERNAL_JFREMERGENCY_HPP
-
-
+public class FormatCheckingTest {
+    public static void main(String args[]) throws Throwable {
+        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("BadHelloWorld");
+        OutputAnalyzer output = new OutputAnalyzer(pb.start());
+        output.shouldContain("java.lang.ClassFormatError: Illegal class name");
+        output.shouldHaveExitValue(1);
+    }
+}
