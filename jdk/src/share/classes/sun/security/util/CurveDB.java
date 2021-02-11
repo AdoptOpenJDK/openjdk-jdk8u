@@ -23,7 +23,7 @@
  * questions.
  */
 
-package sun.security.ec;
+package sun.security.util;
 
 import java.math.BigInteger;
 
@@ -56,10 +56,10 @@ public class CurveDB {
 
     private static Collection<? extends NamedCurve> specCollection;
 
-    static final String SPLIT_PATTERN = ",|\\[|\\]";
+    public static final String SPLIT_PATTERN = ",|\\[|\\]";
 
     // Used by SunECEntries
-    static Collection<? extends NamedCurve>getSupportedCurves() {
+    public static Collection<? extends NamedCurve>getSupportedCurves() {
         return specCollection;
     }
 
@@ -155,8 +155,27 @@ public class CurveDB {
         }
     }
 
+    private static class Holder {
+        private static final Pattern nameSplitPattern = Pattern.compile(
+                SPLIT_PATTERN);
+    }
+
+    // Return all the names the EC curve could be using.
+    static String[] getNamesByOID(String oid) {
+        NamedCurve nc = oidMap.get(oid);
+        if (nc == null) {
+            return new String[0];
+        }
+        String[] list = Holder.nameSplitPattern.split(nc.getName());
+        int i = 0;
+        do {
+            list[i] = list[i].trim();
+        } while (++i < list.length);
+        return list;
+    }
+
     static {
-        Pattern nameSplitPattern = Pattern.compile(SPLIT_PATTERN);
+        Pattern nameSplitPattern = Holder.nameSplitPattern;
 
         /* SEC2 prime curves */
         add("secp112r1", "1.3.132.0.6", P,
