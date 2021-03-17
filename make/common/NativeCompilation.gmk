@@ -453,6 +453,7 @@ define SetupNativeCompilation
             # The dependency on TARGET is needed on windows for debuginfo files
             # to be rebuilt properly.
             $$($1_OUTPUT_DIR)/% : $$($1_OBJECT_DIR)/% $$($1_TARGET)
+		echo "AMLDEBUG COPPYING $$< to $$@"
 		$(CP) $$< $$@
           endif
         endif
@@ -545,6 +546,8 @@ define SetupNativeCompilation
         # Touch target to make sure it has a later time stamp than the debug
         # symbol files to avoid unnecessary relinking on rebuild.
         ifeq ($(OPENJDK_TARGET_OS), windows)
+	  echo "AMLDEBUG: $$($1_BASENAME)"
+	  ls -l $$($1_OBJECT_DIR)/$$($1_NOSUFFIX).pdb || true
 	  $(TOUCH) $$@
         endif
 
@@ -580,6 +583,8 @@ define SetupNativeCompilation
         # Touch target to make sure it has a later time stamp than the debug
         # symbol files to avoid unnecessary relinking on rebuild.
         ifeq ($(OPENJDK_TARGET_OS), windows)
+	  echo "AMLDEBUG: $$($1_BASENAME)"
+	  ls -l $$($1_OBJECT_DIR)/$$($1_NOSUFFIX).pdb || true
 	  $(TOUCH) $$@
         endif
 

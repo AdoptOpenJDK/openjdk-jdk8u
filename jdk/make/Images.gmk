@@ -71,6 +71,7 @@ define AddFileToCopy
   $2_$3_FILE := $$(patsubst $1/%,%,$3)
 
   $2/$$($2_$3_FILE): $3
+	echo "AMLDEBUG COPY $3 to $2/$$($2_$3_FILE)"
 	$(ECHO) $(LOG_INFO) Copying $$(patsubst $(OUTPUT_ROOT)/%,%,$$@)
 	$$(install-file)
 
@@ -139,7 +140,7 @@ ifeq ($(PROFILE), )
       clhsdb$(EXE_SUFFIX) \
       hsdb$(EXE_SUFFIX) \
       jfr$(EXE_SUFFIX)
-  NOT_JRE_DEBUGINFO_FILES := $(patsubst %$(EXE_SUFFIX),%$(DEBUGINFO_EXT),$(NOT_JRE_BIN_FILES))
+  NOT_JRE_BIN_DEBUGINFO_FILES := $(patsubst %$(EXE_SUFFIX),%$(DEBUGINFO_EXT),$(NOT_JRE_BIN_FILES))
 endif
 
 WINDOWS_JDK_BIN_FILES = \
@@ -157,17 +158,8 @@ ALL_BIN_LIST := $(call CacheFind, $(JDK_OUTPUTDIR)/bin)
 # Prevent sjavac from entering the images.
 ALL_BIN_LIST := $(filter-out %/sjavac, $(ALL_BIN_LIST))
 
-ifeq ($(OPENJDK_TARGET_OS), windows)
-  # On windows, the libraries are in the bin dir, only filter out debuginfo files
-  # for executables. "java" is both a library and executable.
-  ALL_BIN_EXEC_FILES := $(filter-out java.exe, $(notdir $(filter %.exe, $(ALL_BIN_LIST))))
-  ALL_BIN_DEBUG_FILTER := $(addprefix %, $(patsubst %.exe, %.debuginfo, $(ALL_BIN_EXEC_FILES)) \
-      $(patsubst %.exe, %.diz, $(ALL_BIN_EXEC_FILES))) %.pdb
-  ALL_BIN_LIST := $(filter-out $(ALL_BIN_DEBUG_FILTER), $(ALL_BIN_LIST))
-endif
-
-JDKJRE_BIN_LIST := $(filter-out $(addprefix %, $(NOT_JRE_BIN_FILES)), $(ALL_BIN_LIST))
-JRE_BIN_LIST := $(filter-out $(addprefix %, $(WINDOWS_JDKJRE_BIN_FILES)) $(addprefix %, $(NOT_JRE_DEBUGINFO_FILES)), $(JDKJRE_BIN_LIST))
+JDKJRE_BIN_LIST := $(filter-out $(addprefix %, $(NOT_JRE_BIN_FILES)) $(addprefix %, $(NOT_JRE_BIN_DEBUGINFO_FILES)), $(ALL_BIN_LIST))
+JRE_BIN_LIST := $(filter-out $(addprefix %, $(WINDOWS_JDKJRE_BIN_FILES)), $(JDKJRE_BIN_LIST))
 
 ifeq ($(OPENJDK_TARGET_OS), windows)
   JDK_BIN_LIST := $(filter $(addprefix %, $(WINDOWS_JDK_BIN_FILES)), $(ALL_BIN_LIST))
