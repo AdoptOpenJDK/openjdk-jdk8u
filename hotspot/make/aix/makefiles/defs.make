@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2006, 2013, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2006, 2021, Oracle and/or its affiliates. All rights reserved.
 # Copyright 2012, 2013 SAP AG. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
@@ -142,36 +142,28 @@ ifeq ($(JDK6_OR_EARLIER),0)
         OBJCOPY=$(shell test -x $(ALT_OBJCOPY) && echo $(ALT_OBJCOPY))
       endif
 
-      ifeq ($(OBJCOPY),)
-        _JUNK_ := $(shell \
-          echo >&2 "INFO: no objcopy cmd found so cannot create .debuginfo files. You may need to set ALT_OBJCOPY.")
-        ENABLE_FULL_DEBUG_SYMBOLS=0
-        _JUNK_ := $(shell \
-          echo >&2 "INFO: ENABLE_FULL_DEBUG_SYMBOLS=$(ENABLE_FULL_DEBUG_SYMBOLS)")
-      else
-        _JUNK_ := $(shell \
-          echo >&2 "INFO: $(OBJCOPY) cmd found so will create .debuginfo files.")
+      _JUNK_ := $(shell \
+        echo >&2 "INFO: AIX .debuginfo files will be produced.")
 
-        # Library stripping policies for .debuginfo configs:
-        #   all_strip - strips everything from the library
-        #   min_strip - strips most stuff from the library; leaves minimum symbols
-        #   no_strip  - does not strip the library at all
-        #
-        # Oracle security policy requires "all_strip". A waiver was granted on
-        # 2011.09.01 that permits using "min_strip" in the Java JDK and Java JRE.
-        #
-        # Currently, STRIP_POLICY is only used when Full Debug Symbols is enabled.
-        #
-        STRIP_POLICY ?= min_strip
+      # Library stripping policies for .debuginfo configs:
+      #   all_strip - strips everything from the library
+      #   min_strip - strips most stuff from the library; leaves minimum symbols
+      #   no_strip  - does not strip the library at all
+      #
+      # Oracle security policy requires "all_strip". A waiver was granted on
+      # 2011.09.01 that permits using "min_strip" in the Java JDK and Java JRE.
+      #
+      # Currently, STRIP_POLICY is only used when Full Debug Symbols is enabled.
+      #
+      STRIP_POLICY ?= min_strip
 
-        _JUNK_ := $(shell \
-          echo >&2 "INFO: STRIP_POLICY=$(STRIP_POLICY)")
+      _JUNK_ := $(shell \
+        echo >&2 "INFO: STRIP_POLICY=$(STRIP_POLICY)")
 
-        ZIP_DEBUGINFO_FILES ?= 1
+      ZIP_DEBUGINFO_FILES ?= 1
 
-        _JUNK_ := $(shell \
-          echo >&2 "INFO: ZIP_DEBUGINFO_FILES=$(ZIP_DEBUGINFO_FILES)")
-      endif
+      _JUNK_ := $(shell \
+        echo >&2 "INFO: ZIP_DEBUGINFO_FILES=$(ZIP_DEBUGINFO_FILES)")
     endif # ENABLE_FULL_DEBUG_SYMBOLS=1
   endif # BUILD_FLAVOR
 endif # JDK_6_OR_EARLIER
