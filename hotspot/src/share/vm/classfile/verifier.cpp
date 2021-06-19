@@ -48,6 +48,9 @@
 #ifdef TARGET_ARCH_x86
 # include "bytes_x86.hpp"
 #endif
+#ifdef TARGET_ARCH_aarch64
+# include "bytes_aarch64.hpp"
+#endif
 #ifdef TARGET_ARCH_sparc
 # include "bytes_sparc.hpp"
 #endif
@@ -98,7 +101,7 @@ bool Verifier::should_verify_for(oop class_loader, bool should_verify_class) {
     BytecodeVerificationLocal : BytecodeVerificationRemote;
 }
 
-bool Verifier::relax_verify_for(oop loader) {
+bool Verifier::relax_access_for(oop loader) {
   bool trusted = java_lang_ClassLoader::is_trusted_loader(loader);
   bool need_verify =
     // verifyAll

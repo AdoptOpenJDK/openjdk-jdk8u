@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,7 @@ package com.oracle.java.testlibrary;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Path;
@@ -37,7 +38,7 @@ import java.util.Collections;
 import java.util.List;
 
 import com.oracle.java.testlibrary.Utils;
-import com.oracle.java.testlibrary.Platform;
+import com.oracle.java.testlibrary.Container;
 import com.oracle.java.testlibrary.OutputAnalyzer;
 import com.oracle.java.testlibrary.ProcessTools;
 
@@ -46,8 +47,18 @@ public class DockerTestUtils {
     private static boolean isDockerEngineAvailable = false;
     private static boolean wasDockerEngineChecked = false;
 
-    // Diagnostics: set to true to enable more diagnostic info
-    private static final boolean DEBUG = false;
+    // Set this property to true to retain image after test. By default
+    // images are removed after test execution completes.
+    // Retaining the image can be useful for diagnostics and image inspection.
+    // E.g.: start image interactively: docker run -it <IMAGE_NAME>.
+    public static final boolean RETAIN_IMAGE_AFTER_TEST =
+        Boolean.getBoolean("jdk.test.docker.retain.image");
+
+    // Path to a JDK under test.
+    // This may be useful when developing tests on non-Linux platforms.
+    public static final String JDK_UNDER_TEST =
+        System.getProperty("jdk.test.docker.jdk", Utils.TEST_JDK);
+
 
     /**
      * Optimized check of whether the docker engine is available in a given
@@ -95,7 +106,7 @@ public class DockerTestUtils {
      */
     private static boolean isDockerEngineAvailableCheck() throws Exception {
         try {
-            execute("docker", "ps")
+            execute(Container.ENGINE_COMMAND, "ps")
                 .shouldHaveExitValue(0)
                 .shouldContain("CONTAINER")
                 .shouldContain("IMAGE");
@@ -125,13 +136,8 @@ public class DockerTestUtils {
         if (Files.exists(buildDir)) {
             throw new RuntimeException("The docker build directory already exists: " + buildDir);
         }
-        // check for the existance of a platform specific docker file as well
-        String platformSpecificDockerfile = dockerfile + "-" + Platform.getOsArch();
-        if (Files.exists(Paths.get(Utils.TEST_SRC, platformSpecificDockerfile))) {
-          dockerfile = platformSpecificDockerfile;
-        }
 
-        Path jdkSrcDir = Paths.get(Utils.TEST_JDK);
+        Path jdkSrcDir = Paths.get(JDK_UNDER_TEST);
         Path jdkDstDir = buildDir.resolve("jdk");
 
         Files.createDirectories(jdkDstDir);
@@ -156,13 +162,13 @@ public class DockerTestUtils {
      */
     public static void
         buildDockerImage(String imageName, Path dockerfile, Path buildDir) throws Exception {
-        // Copy docker file to the build dir
-        Files.copy(dockerfile, buildDir.resolve("Dockerfile"));
+        generateDockerFile(buildDir.resolve("Dockerfile"),
+                           DockerfileConfig.getBaseImageName(),
+                           DockerfileConfig.getBaseImageVersion());
 
         // Build the docker
-        execute("docker", "build", "--no-cache", "--tag", imageName, buildDir.toString())
-            .shouldHaveExitValue(0)
-            .shouldContain("Successfully built");
+        execute(Container.ENGINE_COMMAND, "build", "--no-cache", "--tag", imageName, buildDir.toString())
+            .shouldHaveExitValue(0);
     }
 
 
@@ -177,7 +183,7 @@ public class DockerTestUtils {
     public static OutputAnalyzer dockerRunJava(DockerRunOptions opts) throws Exception {
         ArrayList<String> cmd = new ArrayList<>();
 
-        cmd.add("docker");
+        cmd.add(Container.ENGINE_COMMAND);
         cmd.add("run");
         if (opts.tty)
             cmd.add("--tty=true");
@@ -203,11 +209,10 @@ public class DockerTestUtils {
      * Remove docker image
      *
      * @param DockerRunOptions optins for running docker
-     * @return output of the command
      * @throws Exception
      */
-    public static OutputAnalyzer removeDockerImage(String imageNameAndTag) throws Exception {
-        return execute("docker", "rmi", "--force", imageNameAndTag);
+    public static void removeDockerImage(String imageNameAndTag) throws Exception {
+            execute(Container.ENGINE_COMMAND, "rmi", "--force", imageNameAndTag);
     }
 
 
@@ -244,6 +249,18 @@ public class DockerTestUtils {
         System.out.println("[STDOUT]\n" + output.getStdout());
 
         return output;
+    }
+
+
+    private static void generateDockerFile(Path dockerfile, String baseImage,
+                                           String baseImageVersion) throws Exception {
+        String template =
+            "FROM %s:%s\n" +
+            "COPY /jdk /jdk\n" +
+            "ENV JAVA_HOME=/jdk\n" +
+            "CMD [\"/bin/bash\"]\n";
+        String dockerFileStr = String.format(template, baseImage, baseImageVersion);
+        Files.write(dockerfile, dockerFileStr.getBytes(StandardCharsets.UTF_8));
     }
 
 

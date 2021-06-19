@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,12 +34,15 @@
 
 bool  OSContainer::_is_initialized   = false;
 bool  OSContainer::_is_containerized = false;
+int   OSContainer::_active_processor_count = 1;
 julong _unlimited_memory;
 
 class CgroupSubsystem: CHeapObj<mtInternal> {
  friend class OSContainer;
 
  private:
+    volatile jlong _next_check_counter;
+
     /* mountinfo contents */
     char *_root;
     char *_mount_point;
@@ -52,6 +55,7 @@ class CgroupSubsystem: CHeapObj<mtInternal> {
       _root = os::strdup(root);
       _mount_point = os::strdup(mountpoint);
       _path = NULL;
+      _next_check_counter = min_jlong;
     }
 
     /*
@@ -80,14 +84,14 @@ class CgroupSubsystem: CHeapObj<mtInternal> {
             buf[MAXPATHLEN-1] = '\0';
             _path = os::strdup(buf);
           } else {
-            char *p = strstr(_root, cgroup_path);
+            char *p = strstr(cgroup_path, _root);
             if (p != NULL && p == _root) {
               if (strlen(cgroup_path) > strlen(_root)) {
                 int buflen;
                 strncpy(buf, _mount_point, MAXPATHLEN);
                 buf[MAXPATHLEN-1] = '\0';
                 buflen = strlen(buf);
-                if ((buflen + strlen(cgroup_path)) > (MAXPATHLEN-1)) {
+                if ((buflen + strlen(cgroup_path) - strlen(_root)) > (MAXPATHLEN-1)) {
                   return;
                 }
                 strncat(buf, cgroup_path + strlen(_root), MAXPATHLEN-buflen);
@@ -101,9 +105,35 @@ class CgroupSubsystem: CHeapObj<mtInternal> {
     }
 
     char *subsystem_path() { return _path; }
+
+    bool cache_has_expired() {
+      return os::elapsed_counter() > _next_check_counter;
+    }
+
+    void set_cache_expiry_time(jlong timeout) {
+      _next_check_counter = os::elapsed_counter() + timeout;
+    }
 };
 
-CgroupSubsystem* memory = NULL;
+class CgroupMemorySubsystem: CgroupSubsystem {
+ friend class OSContainer;
+
+ private:
+    /* Some container runtimes set limits via cgroup
+     * hierarchy. If set to true consider also memory.stat
+     * file if everything else seems unlimited */
+    bool _uses_mem_hierarchy;
+
+ public:
+    CgroupMemorySubsystem(char *root, char *mountpoint) : CgroupSubsystem::CgroupSubsystem(root, mountpoint) {
+      _uses_mem_hierarchy = false;
+    }
+
+    bool is_hierarchical() { return _uses_mem_hierarchy; }
+    void set_hierarchical(bool value) { _uses_mem_hierarchy = value; }
+};
+
+CgroupMemorySubsystem* memory = NULL;
 CgroupSubsystem* cpuset = NULL;
 CgroupSubsystem* cpu = NULL;
 CgroupSubsystem* cpuacct = NULL;
@@ -112,24 +142,27 @@ typedef char * cptr;
 
 PRAGMA_DIAG_PUSH
 PRAGMA_FORMAT_NONLITERAL_IGNORED
-template <typename T> int subsystem_file_contents(CgroupSubsystem* c,
+template <typename T> int subsystem_file_line_contents(CgroupSubsystem* c,
                                               const char *filename,
+                                              const char *matchline,
                                               const char *scan_fmt,
                                               T returnval) {
   FILE *fp = NULL;
   char *p;
   char file[MAXPATHLEN+1];
   char buf[MAXPATHLEN+1];
+  char discard[MAXPATHLEN+1];
+  bool found_match = false;
 
   if (c == NULL) {
     if (PrintContainerInfo) {
-      tty->print_cr("subsystem_file_contents: CgroupSubsytem* is NULL");
+      tty->print_cr("subsystem_file_line_contents: CgroupSubsytem* is NULL");
     }
     return OSCONTAINER_ERROR;
   }
   if (c->subsystem_path() == NULL) {
     if (PrintContainerInfo) {
-      tty->print_cr("subsystem_file_contents: subsystem path is NULL");
+      tty->print_cr("subsystem_file_line_contents: subsystem path is NULL");
     }
     return OSCONTAINER_ERROR;
   }
@@ -149,19 +182,33 @@ template <typename T> int subsystem_file_contents(CgroupSubsystem* c,
   }
   fp = fopen(file, "r");
   if (fp != NULL) {
-    p = fgets(buf, MAXPATHLEN, fp);
-    if (p != NULL) {
-      int matched = sscanf(p, scan_fmt, returnval);
-      if (matched == 1) {
+    int err = 0;
+    while ((p = fgets(buf, MAXPATHLEN, fp)) != NULL) {
+      found_match = false;
+      if (matchline == NULL) {
+        // single-line file case
+        int matched = sscanf(p, scan_fmt, returnval);
+        found_match = (matched == 1);
+      } else {
+        // multi-line file case
+        if (strstr(p, matchline) != NULL) {
+          // discard matchline string prefix
+          int matched = sscanf(p, scan_fmt, discard, returnval);
+          found_match = (matched == 2);
+        } else {
+          continue; // substring not found
+        }
+      }
+      if (found_match) {
         fclose(fp);
         return 0;
       } else {
+        err = 1;
         if (PrintContainerInfo) {
           tty->print_cr("Type %s not found in file %s", scan_fmt, file);
         }
       }
-    } else {
-      if (PrintContainerInfo) {
+      if (err == 0 && PrintContainerInfo) {
         tty->print_cr("Empty file %s", file);
       }
     }
@@ -181,10 +228,11 @@ PRAGMA_DIAG_POP
   return_type variable;                                                   \
 {                                                                         \
   int err;                                                                \
-  err = subsystem_file_contents(subsystem,                                \
-                                filename,                                 \
-                                scan_fmt,                                 \
-                                &variable);                               \
+  err = subsystem_file_line_contents(subsystem,                           \
+                                     filename,                            \
+                                     NULL,                                \
+                                     scan_fmt,                            \
+                                     &variable);                          \
   if (err != 0)                                                           \
     return (return_type) OSCONTAINER_ERROR;                               \
                                                                           \
@@ -197,10 +245,11 @@ PRAGMA_DIAG_POP
   char variable[bufsize];                                                 \
 {                                                                         \
   int err;                                                                \
-  err = subsystem_file_contents(subsystem,                                \
-                                filename,                                 \
-                                scan_fmt,                                 \
-                                variable);                                \
+  err = subsystem_file_line_contents(subsystem,                           \
+                                     filename,                            \
+                                     NULL,                                \
+                                     scan_fmt,                            \
+                                     variable);                           \
   if (err != 0)                                                           \
     return (return_type) NULL;                                            \
                                                                           \
@@ -208,22 +257,35 @@ PRAGMA_DIAG_POP
     tty->print_cr(logstring, variable);                                   \
 }
 
+#define GET_CONTAINER_INFO_LINE(return_type, subsystem, filename,         \
+                           matchline, logstring, scan_fmt, variable)      \
+  return_type variable;                                                   \
+{                                                                         \
+  int err;                                                                \
+  err = subsystem_file_line_contents(subsystem,                           \
+                                filename,                                 \
+                                matchline,                                \
+                                scan_fmt,                                 \
+                                &variable);                               \
+  if (err != 0)                                                           \
+    return (return_type) OSCONTAINER_ERROR;                               \
+                                                                          \
+  if (PrintContainerInfo)                                                 \
+    tty->print_cr(logstring, variable);                                   \
+}
+
+
 /* init
  *
  * Initialize the container support and determine if
  * we are running under cgroup control.
  */
 void OSContainer::init() {
-  int mountid;
-  int parentid;
-  int major;
-  int minor;
   FILE *mntinfo = NULL;
   FILE *cgroup = NULL;
   char buf[MAXPATHLEN+1];
   char tmproot[MAXPATHLEN+1];
   char tmpmount[MAXPATHLEN+1];
-  char tmpbase[MAXPATHLEN+1];
   char *p;
   jlong mem_limit;
 
@@ -263,99 +325,27 @@ void OSContainer::init() {
       return;
   }
 
-  while ( (p = fgets(buf, MAXPATHLEN, mntinfo)) != NULL) {
-    // Look for the filesystem type and see if it's cgroup
-    char fstype[MAXPATHLEN+1];
-    fstype[0] = '\0';
-    char *s =  strstr(p, " - ");
-    if (s != NULL &&
-        sscanf(s, " - %s", fstype) == 1 &&
-        strcmp(fstype, "cgroup") == 0) {
+  while ((p = fgets(buf, MAXPATHLEN, mntinfo)) != NULL) {
+    char tmpcgroups[MAXPATHLEN+1];
+    char *cptr = tmpcgroups;
+    char *token;
 
-      if (strstr(p, "memory") != NULL) {
-        int matched = sscanf(p, "%d %d %d:%d %s %s",
-                             &mountid,
-                             &parentid,
-                             &major,
-                             &minor,
-                             tmproot,
-                             tmpmount);
-        if (matched == 6) {
-          memory = new CgroupSubsystem(tmproot, tmpmount);
-        }
-        else
-          if (PrintContainerInfo) {
-            tty->print_cr("Incompatible str containing cgroup and memory: %s", p);
-          }
-      } else if (strstr(p, "cpuset") != NULL) {
-        int matched = sscanf(p, "%d %d %d:%d %s %s",
-                             &mountid,
-                             &parentid,
-                             &major,
-                             &minor,
-                             tmproot,
-                             tmpmount);
-        if (matched == 6) {
-          cpuset = new CgroupSubsystem(tmproot, tmpmount);
-        }
-        else {
-          if (PrintContainerInfo) {
-            tty->print_cr("Incompatible str containing cgroup and cpuset: %s", p);
-          }
-        }
-      } else if (strstr(p, "cpu,cpuacct") != NULL || strstr(p, "cpuacct,cpu") != NULL) {
-        int matched = sscanf(p, "%d %d %d:%d %s %s",
-                             &mountid,
-                             &parentid,
-                             &major,
-                             &minor,
-                             tmproot,
-                             tmpmount);
-        if (matched == 6) {
-          cpu = new CgroupSubsystem(tmproot, tmpmount);
-          cpuacct = new CgroupSubsystem(tmproot, tmpmount);
-        }
-        else {
-          if (PrintContainerInfo) {
-            tty->print_cr("Incompatible str containing cgroup and cpu,cpuacct: %s", p);
-          }
-        }
-      } else if (strstr(p, "cpuacct") != NULL) {
-        int matched = sscanf(p, "%d %d %d:%d %s %s",
-                             &mountid,
-                             &parentid,
-                             &major,
-                             &minor,
-                             tmproot,
-                             tmpmount);
-        if (matched == 6) {
-          cpuacct = new CgroupSubsystem(tmproot, tmpmount);
-        }
-        else {
-          if (PrintContainerInfo) {
-            tty->print_cr("Incompatible str containing cgroup and cpuacct: %s", p);
-          }
-        }
-      } else if (strstr(p, "cpu") != NULL) {
-        int matched = sscanf(p, "%d %d %d:%d %s %s",
-                             &mountid,
-                             &parentid,
-                             &major,
-                             &minor,
-                             tmproot,
-                             tmpmount);
-        if (matched == 6) {
-          cpu = new CgroupSubsystem(tmproot, tmpmount);
-        }
-        else {
-          if (PrintContainerInfo) {
-            tty->print_cr("Incompatible str containing cgroup and cpu: %s", p);
-          }
-        }
+    // mountinfo format is documented at https://www.kernel.org/doc/Documentation/filesystems/proc.txt
+    if (sscanf(p, "%*d %*d %*d:%*d %s %s %*[^-]- cgroup %*s %s", tmproot, tmpmount, tmpcgroups) != 3) {
+      continue;
+    }
+    while ((token = strsep(&cptr, ",")) != NULL) {
+      if (strcmp(token, "memory") == 0) {
+        memory = new CgroupMemorySubsystem(tmproot, tmpmount);
+      } else if (strcmp(token, "cpuset") == 0) {
+        cpuset = new CgroupSubsystem(tmproot, tmpmount);
+      } else if (strcmp(token, "cpu") == 0) {
+        cpu = new CgroupSubsystem(tmproot, tmpmount);
+      } else if (strcmp(token, "cpuacct") == 0) {
+        cpuacct= new CgroupSubsystem(tmproot, tmpmount);
       }
     }
   }
-
   fclose(mntinfo);
 
   if (memory == NULL) {
@@ -415,30 +405,34 @@ void OSContainer::init() {
     return;
   }
 
-  while ( (p = fgets(buf, MAXPATHLEN, cgroup)) != NULL) {
-    int cgno;
-    int matched;
-    char *controller;
+  while ((p = fgets(buf, MAXPATHLEN, cgroup)) != NULL) {
+    char *controllers;
+    char *token;
     char *base;
 
     /* Skip cgroup number */
     strsep(&p, ":");
-    /* Get controller and base */
-    controller = strsep(&p, ":");
+    /* Get controllers and base */
+    controllers = strsep(&p, ":");
     base = strsep(&p, "\n");
 
-    if (controller != NULL) {
-      if (strstr(controller, "memory") != NULL) {
+    if (controllers == NULL) {
+      continue;
+    }
+
+    while ((token = strsep(&controllers, ",")) != NULL) {
+      if (strcmp(token, "memory") == 0) {
         memory->set_subsystem_path(base);
-      } else if (strstr(controller, "cpuset") != NULL) {
+        jlong hierarchy = uses_mem_hierarchy();
+        if (hierarchy > 0) {
+          memory->set_hierarchical(true);
+        }
+      } else if (strcmp(token, "cpuset") == 0) {
         cpuset->set_subsystem_path(base);
-      } else if (strstr(controller, "cpu,cpuacct") != NULL || strstr(controller, "cpuacct,cpu") != NULL) {
+      } else if (strcmp(token, "cpu") == 0) {
         cpu->set_subsystem_path(base);
+      } else if (strcmp(token, "cpuacct") == 0) {
         cpuacct->set_subsystem_path(base);
-      } else if (strstr(controller, "cpuacct") != NULL) {
-        cpuacct->set_subsystem_path(base);
-      } else if (strstr(controller, "cpu") != NULL) {
-        cpu->set_subsystem_path(base);
       }
     }
   }
@@ -449,6 +443,9 @@ void OSContainer::init() {
   // command line arguments have been processed.
   if ((mem_limit = memory_limit_in_bytes()) > 0) {
     os::Linux::set_physical_memory(mem_limit);
+    if (PrintContainerInfo) {
+      tty->print_cr("Memory Limit is: " JLONG_FORMAT, mem_limit);
+    }
   }
 
   _is_containerized = true;
@@ -461,6 +458,21 @@ const char * OSContainer::container_type() {
   } else {
     return NULL;
   }
+}
+
+/* uses_mem_hierarchy
+ *
+ * Return whether or not hierarchical cgroup accounting is being
+ * done.
+ *
+ * return:
+ *    A number > 0 if true, or
+ *    OSCONTAINER_ERROR for not supported
+ */
+jlong OSContainer::uses_mem_hierarchy() {
+  GET_CONTAINER_INFO(jlong, memory, "/memory.use_hierarchy",
+                    "Use Hierarchy is: " JLONG_FORMAT, JLONG_FORMAT, use_hierarchy);
+  return use_hierarchy;
 }
 
 
@@ -479,7 +491,20 @@ jlong OSContainer::memory_limit_in_bytes() {
 
   if (memlimit >= _unlimited_memory) {
     if (PrintContainerInfo) {
-      tty->print_cr("Memory Limit is: Unlimited");
+      tty->print_cr("Non-Hierarchical Memory Limit is: Unlimited");
+    }
+    if (memory->is_hierarchical()) {
+      const char* matchline = "hierarchical_memory_limit";
+      const char* format = "%s " JULONG_FORMAT;
+      GET_CONTAINER_INFO_LINE(julong, memory, "/memory.stat", matchline,
+                             "Hierarchical Memory Limit is: " JULONG_FORMAT, format, hier_memlimit)
+      if (hier_memlimit >= _unlimited_memory) {
+        if (PrintContainerInfo) {
+          tty->print_cr("Hierarchical Memory Limit is: Unlimited");
+        }
+      } else {
+        return (jlong)hier_memlimit;
+      }
     }
     return (jlong)-1;
   }
@@ -493,7 +518,20 @@ jlong OSContainer::memory_and_swap_limit_in_bytes() {
                      "Memory and Swap Limit is: " JULONG_FORMAT, JULONG_FORMAT, memswlimit);
   if (memswlimit >= _unlimited_memory) {
     if (PrintContainerInfo) {
-      tty->print_cr("Memory and Swap Limit is: Unlimited");
+      tty->print_cr("Non-Hierarchical Memory and Swap Limit is: Unlimited");
+    }
+    if (memory->is_hierarchical()) {
+      const char* matchline = "hierarchical_memsw_limit";
+      const char* format = "%s " JULONG_FORMAT;
+      GET_CONTAINER_INFO_LINE(julong, memory, "/memory.stat", matchline,
+                             "Hierarchical Memory and Swap Limit is : " JULONG_FORMAT, format, hier_memlimit)
+      if (hier_memlimit >= _unlimited_memory) {
+        if (PrintContainerInfo) {
+          tty->print_cr("Hierarchical Memory and Swap Limit is: Unlimited");
+        }
+      } else {
+        return (jlong)hier_memlimit;
+      }
     }
     return (jlong)-1;
   } else {
@@ -584,6 +622,17 @@ int OSContainer::active_processor_count() {
   int cpu_count, limit_count;
   int result;
 
+  // We use a cache with a timeout to avoid performing expensive
+  // computations in the event this function is called frequently.
+  // [See 8227006].
+  if (!cpu->cache_has_expired()) {
+    if (PrintContainerInfo) {
+      tty->print_cr("OSContainer::active_processor_count (cached): %d", OSContainer::_active_processor_count);
+    }
+
+    return OSContainer::_active_processor_count;
+  }
+
   cpu_count = limit_count = os::Linux::active_processor_count();
   int quota  = cpu_quota();
   int period = cpu_period();
@@ -622,6 +671,11 @@ int OSContainer::active_processor_count() {
   if (PrintContainerInfo) {
     tty->print_cr("OSContainer::active_processor_count: %d", result);
   }
+
+  // Update the value and reset the cache timeout
+  OSContainer::_active_processor_count = result;
+  cpu->set_cache_expiry_time(OSCONTAINER_CACHE_TIMEOUT);
+
   return result;
 }
 

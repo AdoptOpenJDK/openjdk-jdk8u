@@ -29,6 +29,9 @@
 #ifdef TARGET_ARCH_x86
 # include "c2_globals_x86.hpp"
 #endif
+#ifdef TARGET_ARCH_aarch64
+# include "c2_globals_aarch64.hpp"
+#endif
 #ifdef TARGET_ARCH_sparc
 # include "c2_globals_sparc.hpp"
 #endif
@@ -60,10 +63,10 @@
 
 #define C2_FLAGS(develop, develop_pd, product, product_pd, diagnostic, experimental, notproduct) \
                                                                             \
-  develop(bool, StressLCM, false,                                           \
+  diagnostic(bool, StressLCM, false,                                        \
           "Randomize instruction scheduling in LCM")                        \
                                                                             \
-  develop(bool, StressGCM, false,                                           \
+  diagnostic(bool, StressGCM, false,                                        \
           "Randomize instruction scheduling in GCM")                        \
                                                                             \
   notproduct(intx, CompileZapFirst, 0,                                      \
